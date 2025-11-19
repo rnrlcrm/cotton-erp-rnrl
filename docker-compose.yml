@@ -1,0 +1,107 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: cotton-erp-postgres
+    environment:
+      POSTGRES_USER: cotton_user
+      POSTGRES_PASSWORD: cotton_password
+      POSTGRES_DB: cotton_erp
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./infra/docker/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - cotton-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: cotton-erp-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - cotton-network
+
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: cotton-erp-rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: cotton_user
+      RABBITMQ_DEFAULT_PASS: cotton_password
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    networks:
+      - cotton-network
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: ../infra/docker/backend/Dockerfile.dev
+    container_name: cotton-erp-backend
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: postgresql://cotton_user:cotton_password@postgres:5432/cotton_erp
+      REDIS_URL: redis://redis:6379/0
+      RABBITMQ_URL: amqp://cotton_user:cotton_password@rabbitmq:5672/
+    volumes:
+      - ./backend:/app
+    depends_on:
+      - postgres
+      - redis
+      - rabbitmq
+    networks:
+      - cotton-network
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: ../infra/docker/frontend/Dockerfile.dev
+    container_name: cotton-erp-frontend
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    environment:
+      VITE_API_URL: http://localhost:8000
+    depends_on:
+      - backend
+    networks:
+      - cotton-network
+
+  celery-worker:
+    build:
+      context: ./backend
+      dockerfile: ../infra/docker/backend/Dockerfile.dev
+    container_name: cotton-erp-celery-worker
+    environment:
+      DATABASE_URL: postgresql://cotton_user:cotton_password@postgres:5432/cotton_erp
+      REDIS_URL: redis://redis:6379/0
+      RABBITMQ_URL: amqp://cotton_user:cotton_password@rabbitmq:5672/
+    volumes:
+      - ./backend:/app
+    depends_on:
+      - postgres
+      - redis
+      - rabbitmq
+    networks:
+      - cotton-network
+    command: celery -A workers worker --loglevel=info
+
+networks:
+  cotton-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  redis_data:
+  rabbitmq_data:
