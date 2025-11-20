@@ -17,6 +17,8 @@ from backend.db.session import Base  # noqa: E402
 
 # Import models so that they are registered on Base.metadata for autogenerate
 from backend.modules.settings.models import settings_models as _models  # noqa: F401,E402
+# NOTE: Do NOT import organization models here - they conflict with settings_models.Organization
+# The organization module migration was created manually
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
