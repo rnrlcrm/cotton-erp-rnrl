@@ -8,8 +8,10 @@ from backend.db.session import get_db
 from backend.modules.settings.schemas.settings_schemas import LoginRequest, SignupRequest, TokenResponse, UserOut
 from backend.modules.settings.services.settings_services import AuthService
 from backend.core.auth.deps import get_current_user
+from backend.modules.settings.organization.router import router as organization_router
 
 router = APIRouter()
+router.include_router(organization_router)
 
 
 @router.get("/health", tags=["health"])  # lightweight placeholder
