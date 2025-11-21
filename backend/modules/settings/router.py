@@ -10,10 +10,12 @@ from backend.modules.settings.services.settings_services import AuthService
 from backend.core.auth.deps import get_current_user
 from backend.modules.settings.organization.router import router as organization_router
 from backend.modules.settings.commodities.router import router as commodities_router
+from backend.modules.settings.locations.router import router as locations_router
 
 router = APIRouter()
 router.include_router(organization_router)
 router.include_router(commodities_router)
+router.include_router(locations_router)
 
 
 @router.get("/health", tags=["health"])  # lightweight placeholder

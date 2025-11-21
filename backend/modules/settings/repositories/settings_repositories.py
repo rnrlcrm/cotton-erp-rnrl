@@ -8,7 +8,6 @@ from sqlalchemy.orm import Session
 
 from backend.modules.settings.organization.models import Organization
 from backend.modules.settings.models.settings_models import (
-	Location,
 	Permission,
 	Role,
 	RolePermission,

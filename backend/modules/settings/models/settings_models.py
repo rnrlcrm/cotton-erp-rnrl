@@ -17,6 +17,7 @@ from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship, Mapped, mapped_column
 
 from backend.db.session import Base
+from backend.modules.settings.organization.models import Organization
 
 
 def utcnow() -> datetime:
@@ -26,26 +27,8 @@ def utcnow() -> datetime:
 # Organization model moved to backend.modules.settings.organization.models
 # to avoid duplication with the more complete implementation there
 
-class Location(Base):
-	__tablename__ = "locations"
-
-	id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-	organization_id: Mapped[uuid.UUID] = mapped_column(
-		UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False
-	)
-	name: Mapped[str] = mapped_column(String(255), nullable=False)
-	address: Mapped[str | None] = mapped_column(Text, nullable=True)
-	city: Mapped[str | None] = mapped_column(String(128), nullable=True)
-	state: Mapped[str | None] = mapped_column(String(128), nullable=True)
-	country: Mapped[str | None] = mapped_column(String(64), nullable=True)
-	pincode: Mapped[str | None] = mapped_column(String(16), nullable=True)
-	is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
-	created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
-	updated_at: Mapped[datetime] = mapped_column(
-		DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False
-	)
-
-	organization: Mapped[Organization] = relationship("Organization", back_populates="locations")
+# Location model moved to backend.modules.settings.locations.models
+# New implementation with Google Maps API integration
 
 
 class Permission(Base):

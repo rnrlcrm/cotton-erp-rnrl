@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import importlib.util
 import os
 import sys
 from logging.config import fileConfig
@@ -17,8 +18,32 @@ from backend.db.session import Base  # noqa: E402
 
 # Import models so that they are registered on Base.metadata for autogenerate
 from backend.modules.settings.models import settings_models as _models  # noqa: F401,E402
-# NOTE: Do NOT import organization models here - they conflict with settings_models.Organization
-# The organization module migration was created manually
+from backend.modules.settings.organization.models import (  # noqa: F401,E402
+    Organization,
+    OrganizationGST,
+    OrganizationBankAccount,
+    OrganizationFinancialYear,
+    OrganizationDocumentSeries,
+)
+from backend.modules.settings.commodities.models import (  # noqa: F401,E402
+    Commodity,
+    CommodityVariety,
+    CommodityParameter,
+    SystemCommodityParameter,
+    PaymentTerm,
+    DeliveryTerm,
+    WeightmentTerm,
+    PassingTerm,
+    BargainType,
+    TradeType,
+    CommissionStructure,
+)
+# Direct import from models.py to avoid router initialization
+locations_models_path = REPO_ROOT / "backend" / "modules" / "settings" / "locations" / "models.py"
+spec = importlib.util.spec_from_file_location("locations_models", locations_models_path)
+locations_models = importlib.util.module_from_spec(spec)  # noqa: F401,E402
+sys.modules["locations_models"] = locations_models
+spec.loader.exec_module(locations_models)
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

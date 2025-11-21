@@ -18,8 +18,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from backend.app.main import create_app
-from backend.db.schema.base import Base
-from backend.db.session import get_db
+from backend.db.session import Base, get_db
 
 
 # Use in-memory SQLite for tests
