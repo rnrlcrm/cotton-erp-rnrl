@@ -65,6 +65,7 @@ class User(Base):
 	__tablename__ = "users"
 	__table_args__ = (
 		CheckConstraint("email <> ''", name="ck_user_email_nonempty"),
+		CheckConstraint("email IS NOT NULL OR mobile_number IS NOT NULL", name="ck_user_has_email_or_mobile"),
 		# Data isolation constraints based on user_type
 		CheckConstraint(
 			"""
@@ -104,10 +105,28 @@ class User(Base):
 	)
 	
 	# Existing Fields
-	email: Mapped[str] = mapped_column(String(255), nullable=False, unique=True)
+	email: Mapped[str | None] = mapped_column(String(255), nullable=True, unique=True)
+	mobile_number: Mapped[str | None] = mapped_column(
+		String(20),
+		nullable=True,
+		unique=True,
+		index=True,
+		comment="Mobile number for OTP authentication"
+	)
 	full_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
-	password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
+	password_hash: Mapped[str | None] = mapped_column(String(255), nullable=True, comment="Null for OTP-only users")
 	is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+	is_verified: Mapped[bool] = mapped_column(
+		Boolean,
+		nullable=False,
+		default=False,
+		comment="Mobile/email verified via OTP"
+	)
+	role: Mapped[str | None] = mapped_column(
+		String(50),
+		nullable=True,
+		comment="User role: partner_user, manager, director, etc."
+	)
 	created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
 	updated_at: Mapped[datetime] = mapped_column(
 		DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False

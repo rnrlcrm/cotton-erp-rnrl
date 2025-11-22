@@ -5,6 +5,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from backend.modules.settings.router import router as settings_router
+from backend.modules.partners.router import router as partners_router
+from backend.api.v1.routers.user_onboarding import router as user_onboarding_router
 from backend.app.middleware.security import RequestIDMiddleware, SecureHeadersMiddleware
 from backend.app.middleware import AuthMiddleware, DataIsolationMiddleware
 import logging, json
@@ -91,7 +93,11 @@ def create_app() -> FastAPI:
 	app.state.limiter = limiter
 	app.add_exception_handler(RateLimitExceeded, _rate_limited)
 
+	# API Routers
+	app.include_router(user_onboarding_router, prefix="/api/v1", tags=["auth"])
+	app.include_router(partners_router, prefix="/api/v1", tags=["partners"])
 	app.include_router(settings_router, prefix="/api/v1/settings", tags=["settings"])
+	
 	return app
 
 

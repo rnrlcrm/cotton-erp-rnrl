@@ -35,3 +35,9 @@ def create_token(sub: str, org_id: str, minutes: int | None = None, days: int | 
 
 def decode_token(token: str) -> dict:
     return jwt.decode(token, settings.JWT_SECRET, algorithms=[settings.JWT_ALG])
+
+
+# Alias for backward compatibility
+def create_access_token(sub: str, org_id: str = "default", minutes: int | None = None) -> str:
+    """Create access token (alias for create_token)"""
+    return create_token(sub=sub, org_id=org_id, minutes=minutes, token_type="access")

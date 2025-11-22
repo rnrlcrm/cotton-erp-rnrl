@@ -38,6 +38,10 @@ SKIP_AUTH_PATHS = {
     "/api/v1/auth/login",
     "/api/v1/auth/register",
     "/api/v1/auth/refresh",
+    "/api/v1/auth/send-otp",
+    "/api/v1/auth/verify-otp",
+    "/api/v1/auth/complete-profile",
+    "/api/v1/partners/onboarding",  # Onboarding endpoints use token with mobile as subject
 }
 
 
@@ -150,9 +154,16 @@ class AuthMiddleware(BaseHTTPMiddleware):
         if path in SKIP_AUTH_PATHS:
             return True
         
-        # Skip paths starting with /docs or /static
-        if path.startswith("/docs") or path.startswith("/static"):
-            return True
+        # Prefix match for certain endpoints (e.g., /api/v1/partners/onboarding/*)
+        skip_prefixes = [
+            "/docs",
+            "/static",
+            "/api/v1/partners/onboarding",
+            "/api/v1/auth",
+        ]
+        for prefix in skip_prefixes:
+            if path.startswith(prefix):
+                return True
         
         return False
     

@@ -75,6 +75,10 @@ class DataIsolationMiddleware(BaseHTTPMiddleware):
         '/api/v1/auth/register',
         '/api/v1/auth/forgot-password',
         '/api/v1/auth/reset-password',
+        '/api/v1/auth/send-otp',
+        '/api/v1/auth/verify-otp',
+        '/api/v1/auth/complete-profile',
+        '/api/v1/partners/onboarding',  # Onboarding endpoints (user doesn't have business_partner_id yet)
     ]
     
     def __init__(self, app: ASGIApp) -> None:
@@ -163,7 +167,16 @@ class DataIsolationMiddleware(BaseHTTPMiddleware):
         Returns:
             bool: True if public, False if requires auth
         """
-        return any(path.startswith(skip_path) for skip_path in self.SKIP_PATHS)
+        # Exact match
+        if any(path == skip_path for skip_path in self.SKIP_PATHS):
+            return True
+        
+        # Prefix match (e.g., /api/v1/partners/onboarding/*)
+        skip_prefixes = [
+            "/api/v1/partners/onboarding",
+            "/api/v1/auth",
+        ]
+        return any(path.startswith(prefix) for prefix in skip_prefixes)
     
     def _validate_user_object(self, user) -> None:
         """
