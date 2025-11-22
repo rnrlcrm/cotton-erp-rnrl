@@ -114,7 +114,8 @@ class User(Base):
 	)
 
 	# Relationships
-	organization: Mapped[Organization | None] = relationship("Organization", back_populates="users")
+	# organization relationship commented out until Organization.users backref is added
+	# organization: Mapped[Organization | None] = relationship("Organization", back_populates="users")
 	# business_partner relationship will be added when BP module is fully implemented
 
 
