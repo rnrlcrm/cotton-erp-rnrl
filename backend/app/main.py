@@ -6,6 +6,7 @@ from fastapi.responses import JSONResponse
 
 from backend.modules.settings.router import router as settings_router
 from backend.app.middleware.security import RequestIDMiddleware, SecureHeadersMiddleware
+from backend.app.middleware import AuthMiddleware, DataIsolationMiddleware
 import logging, json
 from logging.config import dictConfig
 from pathlib import Path
@@ -42,8 +43,10 @@ def create_app() -> FastAPI:
 		provider.add_span_processor(BatchSpanProcessor(span_exporter))
 		trace.set_tracer_provider(provider)
 		FastAPIInstrumentor.instrument_app(app, tracer_provider=provider)
-	# Middlewares
+	# Middlewares (order matters: RequestID → Auth → Isolation → Security → CORS)
 	app.add_middleware(RequestIDMiddleware)
+	app.add_middleware(AuthMiddleware)
+	app.add_middleware(DataIsolationMiddleware)
 	app.add_middleware(SecureHeadersMiddleware)
 	# CORS
 	origins = [o.strip() for o in settings.ALLOWED_ORIGINS.split(",") if o.strip()]
