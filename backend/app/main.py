@@ -122,6 +122,10 @@ def create_app() -> FastAPI:
 	from backend.api.v1.webhooks import router as webhooks_router
 	app.include_router(webhooks_router, prefix="/api/v1", tags=["webhooks"])
 	
+	# Sync API (Mobile Offline-First)
+	from backend.api.v1.sync import router as sync_router
+	app.include_router(sync_router, prefix="/api/v1", tags=["sync"])
+	
 	return app
 
 
