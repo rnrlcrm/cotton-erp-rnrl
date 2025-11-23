@@ -61,7 +61,6 @@ def create_app() -> FastAPI:
 		- **INTERNAL**: Organization-scoped data
 		- **EXTERNAL**: Business partner-scoped data
 		""",
-		version="1.0.0",
 		docs_url="/api/docs",
 		redoc_url="/api/redoc",
 		openapi_url="/api/openapi.json",
