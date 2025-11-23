@@ -106,6 +106,10 @@ def create_app() -> FastAPI:
 	from backend.api.v1.privacy import router as privacy_router
 	app.include_router(privacy_router, prefix="/api/v1", tags=["privacy"])
 	
+	# WebSocket Real-time (NEW)
+	from backend.api.v1.websocket import router as websocket_router
+	app.include_router(websocket_router, prefix="/api/v1", tags=["websocket"])
+	
 	return app
 
 
