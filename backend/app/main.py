@@ -98,6 +98,14 @@ def create_app() -> FastAPI:
 	app.include_router(partners_router, prefix="/api/v1", tags=["partners"])
 	app.include_router(settings_router, prefix="/api/v1/settings", tags=["settings"])
 	
+	# Session Management (NEW)
+	from backend.modules.auth.router import router as session_router
+	app.include_router(session_router, prefix="/api/v1", tags=["sessions"])
+	
+	# Privacy & GDPR (NEW)
+	from backend.api.v1.privacy import router as privacy_router
+	app.include_router(privacy_router, prefix="/api/v1", tags=["privacy"])
+	
 	return app
 
 

@@ -80,3 +80,9 @@ phonenumbers==8.13.27
 # Excel import/export
 openpyxl>=3.1.2
 python-multipart>=0.0.6
+
+# User-Agent parsing (device fingerprinting)
+user-agents>=2.2.0
+
+# Rate Limiting (enhanced)
+slowapi>=0.1.9
