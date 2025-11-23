@@ -12,7 +12,7 @@ from backend.core.webhooks.manager import WebhookManager
 from backend.core.webhooks.queue import WebhookQueue, QueuePriority
 from backend.core.webhooks.signer import WebhookSigner
 from backend.core.webhooks.delivery import WebhookDelivery, DeliveryStatus
-from backend.core.webhooks.schemas import WebhookEvent, WebhookSubscription
+from backend.core.webhooks.schemas import WebhookEvent, WebhookSubscription, WebhookEventType
 
 __all__ = [
     "WebhookManager",
@@ -23,4 +23,5 @@ __all__ = [
     "DeliveryStatus",
     "WebhookEvent",
     "WebhookSubscription",
+    "WebhookEventType",
 ]

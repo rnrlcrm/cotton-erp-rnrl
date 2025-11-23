@@ -110,6 +110,10 @@ def create_app() -> FastAPI:
 	from backend.api.v1.websocket import router as websocket_router
 	app.include_router(websocket_router, prefix="/api/v1", tags=["websocket"])
 	
+	# Webhooks (NEW)
+	from backend.api.v1.webhooks import router as webhooks_router
+	app.include_router(webhooks_router, prefix="/api/v1", tags=["webhooks"])
+	
 	return app
 
 
