@@ -60,8 +60,14 @@ class HSNLearningService:
         "rice": {"hsn": "1006", "desc": "Rice", "gst": 5.0},
         "corn": {"hsn": "1005", "desc": "Maize (corn)", "gst": 5.0},
         "maize": {"hsn": "1005", "desc": "Maize (corn)", "gst": 5.0},
+        
+        # Agricultural - Oil Seeds
         "soybean": {"hsn": "1201", "desc": "Soya beans", "gst": 5.0},
         "soya": {"hsn": "1201", "desc": "Soya beans", "gst": 5.0},
+        "sunflower": {"hsn": "1206", "desc": "Sunflower seeds", "gst": 5.0},
+        "sunflower seed": {"hsn": "1206", "desc": "Sunflower seeds", "gst": 5.0},
+        "groundnut": {"hsn": "1202", "desc": "Groundnuts (peanuts)", "gst": 5.0},
+        "peanut": {"hsn": "1202", "desc": "Groundnuts (peanuts)", "gst": 5.0},
         
         # Synthetic fibers
         "polyester": {"hsn": "5503", "desc": "Synthetic staple fibers", "gst": 18.0},
@@ -163,6 +169,10 @@ class HSNLearningService:
         category: Optional[str] = None
     ) -> Optional[HSNSuggestion]:
         """Search learned HSN mappings"""
+        
+        # Return None if no database session
+        if not self.db:
+            return None
         
         # Try exact match first (case-insensitive)
         query = select(HSNKnowledgeBase).where(
@@ -306,6 +316,10 @@ class HSNLearningService:
         user_id: Optional[UUID] = None
     ):
         """Save learned HSN mapping to knowledge base"""
+        
+        # Skip if no database session
+        if not self.db:
+            return
         
         # Check if entry already exists
         query = select(HSNKnowledgeBase).where(
