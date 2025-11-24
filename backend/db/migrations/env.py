@@ -38,6 +38,12 @@ from backend.modules.settings.commodities.models import (  # noqa: F401,E402
     TradeType,
     CommissionStructure,
 )
+from backend.modules.settings.commodities.hsn_models import (  # noqa: F401,E402
+    HSNKnowledgeBase,
+)
+from backend.modules.partners.models import (  # noqa: F401,E402
+    BusinessPartner,
+)
 # Direct import from models.py to avoid router initialization
 locations_models_path = REPO_ROOT / "backend" / "modules" / "settings" / "locations" / "models.py"
 spec = importlib.util.spec_from_file_location("locations_models", locations_models_path)

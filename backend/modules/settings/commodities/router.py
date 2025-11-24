@@ -93,10 +93,10 @@ async def get_event_emitter(
     return EventEmitter(db)
 
 
-# Dependency for AI helper
-def get_ai_helper() -> CommodityAIHelper:
-    """Get AI helper instance"""
-    return CommodityAIHelper()
+# Dependency for AI helper (now with learning capability)
+def get_ai_helper(db: AsyncSession = Depends(get_db)) -> CommodityAIHelper:
+    """Get AI helper instance with database access for learning"""
+    return CommodityAIHelper(db)
 
 
 # ===== COMMODITY ENDPOINTS =====

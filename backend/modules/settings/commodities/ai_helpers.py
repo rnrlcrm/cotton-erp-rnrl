@@ -10,15 +10,28 @@ from decimal import Decimal
 from typing import Dict, List, Optional
 from uuid import UUID
 
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from backend.modules.settings.commodities.schemas import (
     CategorySuggestion,
     HSNSuggestion,
     ParameterSuggestion,
 )
+from backend.modules.settings.commodities.hsn_learning import HSNLearningService
 
 
 class CommodityAIHelper:
-    """AI helper for commodity operations"""
+    """AI helper for commodity operations with learning capabilities"""
+    
+    def __init__(self, db: Optional[AsyncSession] = None):
+        """
+        Initialize AI helper.
+        
+        Args:
+            db: Database session for learning service (optional for backwards compat)
+        """
+        self.db = db
+        self.hsn_learning = HSNLearningService(db) if db else None
     
     # HSN Code database (Cotton-specific)
     HSN_DATABASE = {
@@ -187,9 +200,17 @@ class CommodityAIHelper:
         """
         Suggest HSN code based on commodity name and category.
         
-        Uses lookup table with fuzzy matching.
-        In production, this would query HSN API or ML model.
+        Uses intelligent learning system:
+        1. Checks knowledge base (learned mappings)
+        2. Queries HSN API (if configured)
+        3. Falls back to local data
         """
+        
+        # Use learning service if available (new behavior)
+        if self.hsn_learning:
+            return await self.hsn_learning.suggest_hsn(name, category, description)
+        
+        # Fallback to old hardcoded logic (backwards compatibility)
         search_text = name.lower()
         
         # Try exact match first
@@ -235,9 +256,40 @@ class CommodityAIHelper:
         """
         Suggest quality parameters based on commodity category.
         
-        Returns standard parameters from knowledge base.
-        In production, this would use ML to suggest parameters.
+        Uses intelligent system:
+        1. Queries database templates (if db available)
+        2. Falls back to hardcoded standards
         """
+        
+        # Use database templates if available (new behavior)
+        if self.db:
+            from backend.modules.settings.commodities.models import SystemCommodityParameter
+            from sqlalchemy import select
+            
+            # Search for templates matching this category
+            stmt = select(SystemCommodityParameter).where(
+                SystemCommodityParameter.category.ilike(f"%{category}%")
+            ).limit(20)
+            
+            result = await self.db.execute(stmt)
+            templates = result.scalars().all()
+            
+            if templates:
+                suggestions = []
+                for template in templates:
+                    suggestions.append(
+                        ParameterSuggestion(
+                            name=template.parameter_name,
+                            type=template.data_type,
+                            unit=template.unit,
+                            typical_range=f"{template.min_value}-{template.max_value}" if template.min_value else None,
+                            mandatory=template.is_mandatory,
+                            description=template.description or f"Standard {template.parameter_name} measurement"
+                        )
+                    )
+                return suggestions
+        
+        # Fallback to hardcoded logic (backwards compatibility)
         # Determine specific category key
         category_key = category
         

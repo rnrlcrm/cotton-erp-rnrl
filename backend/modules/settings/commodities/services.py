@@ -111,6 +111,16 @@ class CommodityService:
         # Create commodity
         commodity = await self.repository.create(data)
         
+        # NEW: Learn from this commodity creation (AI self-improvement)
+        if self.ai_helper.hsn_learning and data.hsn_code:
+            await self.ai_helper.hsn_learning.confirm_hsn_mapping(
+                commodity_name=data.name,
+                category=data.category,
+                hsn_code=data.hsn_code,
+                gst_rate=data.gst_rate,
+                user_id=self.current_user_id
+            )
+        
         # Emit event
         await self.event_emitter.emit(
             CommodityCreated(
