@@ -48,6 +48,12 @@ def upgrade() -> None:
     op.drop_index('ix_user_sessions_refresh_token_jti', table_name='user_sessions')
     op.drop_index('ix_user_sessions_user_id', table_name='user_sessions')
     op.drop_table('user_sessions')
+    # Drop user_consents first (has FK to consent_versions)
+    op.drop_index('ix_user_consents_consent_type', table_name='user_consents')
+    op.drop_index('ix_user_consents_given', table_name='user_consents')
+    op.drop_index('ix_user_consents_user_id', table_name='user_consents')
+    op.drop_table('user_consents')
+    # Now drop consent_versions
     op.drop_index('ix_consent_versions_consent_type', table_name='consent_versions')
     op.drop_index('ix_consent_versions_is_active', table_name='consent_versions')
     op.drop_table('consent_versions')
@@ -55,10 +61,6 @@ def upgrade() -> None:
     op.drop_table('data_retention_policies')
     op.drop_index('ix_user_right_requests_user_id', table_name='user_right_requests')
     op.drop_table('user_right_requests')
-    op.drop_index('ix_user_consents_consent_type', table_name='user_consents')
-    op.drop_index('ix_user_consents_given', table_name='user_consents')
-    op.drop_index('ix_user_consents_user_id', table_name='user_consents')
-    op.drop_table('user_consents')
     op.add_column('business_partners', sa.Column('partner_code', sa.String(length=50), nullable=True, comment='Auto-generated: BP-IND-SEL-0001'))
     op.add_column('business_partners', sa.Column('legal_name', sa.String(length=500), nullable=False))
     op.add_column('business_partners', sa.Column('country', sa.String(length=100), nullable=False))
@@ -191,11 +193,13 @@ def upgrade() -> None:
     op.alter_column('partner_amendments', 'old_value',
                existing_type=sa.TEXT(),
                type_=postgresql.JSON(astext_type=sa.Text()),
-               existing_nullable=True)
+               existing_nullable=True,
+               postgresql_using='old_value::json')
     op.alter_column('partner_amendments', 'new_value',
                existing_type=sa.TEXT(),
                type_=postgresql.JSON(astext_type=sa.Text()),
-               nullable=True)
+               nullable=True,
+               postgresql_using='new_value::json')
     op.alter_column('partner_amendments', 'reason',
                existing_type=sa.TEXT(),
                nullable=True)

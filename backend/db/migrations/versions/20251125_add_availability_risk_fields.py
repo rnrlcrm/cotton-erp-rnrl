@@ -202,16 +202,15 @@ def upgrade() -> None:
         'expected_price IS NULL OR expected_price > 0'
     )
     
-    # Foreign key for seller_branch_id
-    op.create_foreign_key(
-        'fk_availabilities_seller_branch_id',
-        'availabilities',
-        'branches',
-        ['seller_branch_id'],
-        ['id'],
-        ondelete='SET NULL'
-    )
-
+    # Foreign key for seller_branch_id - commented out since branches table doesn't exist yet
+    # op.create_foreign_key(
+    #     'fk_availabilities_seller_branch_id',
+    #     'availabilities',
+    #     'branches',
+    #     ['seller_branch_id'],
+    #     ['id'],
+    #     ondelete='SET NULL'
+    # )
 
 def downgrade() -> None:
     """Remove risk management fields from availabilities table"""

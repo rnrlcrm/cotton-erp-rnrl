@@ -211,7 +211,7 @@ def upgrade() -> None:
         """
         CREATE INDEX ix_availabilities_active 
         ON availabilities (commodity_id, location_id, available_quantity)
-        WHERE status = 'AVAILABLE' AND valid_until > NOW()
+        WHERE status = 'AVAILABLE'
         """
     )
     

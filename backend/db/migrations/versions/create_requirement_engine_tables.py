@@ -36,7 +36,7 @@ def upgrade() -> None:
     # ============================================================================
     # ENABLE PGVECTOR EXTENSION (for market_context_embedding)
     # ============================================================================
-    op.execute('CREATE EXTENSION IF NOT EXISTS vector')
+    # op.execute('CREATE EXTENSION IF NOT EXISTS vector')  # Commented out - install pgvector separately if needed
     
     # ============================================================================
     # TABLE: requirements
@@ -262,7 +262,7 @@ def upgrade() -> None:
         # ========================================================================
         # FOREIGN KEY CONSTRAINTS
         # ========================================================================
-        sa.ForeignKeyConstraint(['buyer_partner_id'], ['partners.id'],
+        sa.ForeignKeyConstraint(['buyer_partner_id'], ['business_partners.id'],
                                 name='fk_requirements_buyer_partner',
                                 ondelete='RESTRICT'),
         sa.ForeignKeyConstraint(['commodity_id'], ['commodities.id'],
@@ -277,9 +277,9 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(['cancelled_by_user_id'], ['users.id'],
                                 name='fk_requirements_cancelled_by_user',
                                 ondelete='SET NULL'),
-        sa.ForeignKeyConstraint(['buyer_branch_id'], ['branches.id'],
-                                name='fk_requirements_buyer_branch',
-                                ondelete='SET NULL'),
+        # sa.ForeignKeyConstraint(['buyer_branch_id'], ['branches.id'],  # Commented out - branches table doesn't exist yet
+        #                         name='fk_requirements_buyer_branch',
+        #                         ondelete='SET NULL'),
         
         # ========================================================================
         # CHECK CONSTRAINTS (Business Logic Validation)
@@ -424,7 +424,7 @@ def upgrade() -> None:
     op.execute("""
         CREATE INDEX ix_requirements_active
         ON requirements(commodity_id, buyer_partner_id, urgency_level, intent_type)
-        WHERE status = 'ACTIVE' AND valid_until > NOW()
+        WHERE status = 'ACTIVE'
     """)
     
     # ============================================================================
