@@ -179,7 +179,7 @@ class TestCircularTradingPrevention:
         # Mock existing SELL availability for cotton today
         mock_result = Mock()
         mock_result.scalars.return_value.all.return_value = [
-            Mock(id=100, commodity_id=5, valid_from=datetime.combine(today, datetime.min.time()))
+            Mock(id=100, commodity_id=5, created_at=datetime.combine(today, datetime.min.time()))
         ]
         db_session.execute = AsyncMock(return_value=mock_result)
         
@@ -202,7 +202,7 @@ class TestCircularTradingPrevention:
         # Mock existing BUY requirement for cotton today
         mock_result = Mock()
         mock_result.scalars.return_value.all.return_value = [
-            Mock(id=200, commodity_id=5, valid_from=datetime.combine(today, datetime.min.time()))
+            Mock(id=200, commodity_id=5, created_at=datetime.combine(today, datetime.min.time()))
         ]
         db_session.execute = AsyncMock(return_value=mock_result)
         
@@ -225,7 +225,7 @@ class TestCircularTradingPrevention:
         # Mock existing SELL from yesterday
         mock_result = Mock()
         mock_result.scalars.return_value.all.return_value = [
-            Mock(id=100, commodity_id=5, valid_from=datetime.combine(yesterday, datetime.min.time()))
+            Mock(id=100, commodity_id=5, created_at=datetime.combine(yesterday, datetime.min.time()))
         ]
         db_session.execute = AsyncMock(return_value=mock_result)
         

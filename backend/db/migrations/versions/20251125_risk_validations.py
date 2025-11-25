@@ -83,11 +83,11 @@ def upgrade() -> None:
         """
         CREATE UNIQUE INDEX uq_availabilities_no_duplicates
         ON availabilities (
-            seller_partner_id,
+            seller_id,
             commodity_id,
-            quantity,
+            total_quantity,
             location_id,
-            DATE(valid_from)
+            DATE(created_at)
         )
         WHERE status NOT IN ('CANCELLED', 'SOLD', 'EXPIRED')
         """
@@ -139,9 +139,9 @@ def upgrade() -> None:
         """
         CREATE INDEX ix_availabilities_seller_commodity_date
         ON availabilities (
-            seller_partner_id,
+            seller_id,
             commodity_id,
-            DATE(valid_from)
+            DATE(created_at)
         )
         WHERE status IN ('AVAILABLE', 'PARTIALLY_SOLD')
         """
@@ -154,7 +154,7 @@ def upgrade() -> None:
         ON requirements (
             buyer_partner_id,
             commodity_id,
-            DATE(valid_from)
+            DATE(created_at)
         )
         WHERE status IN ('DRAFT', 'ACTIVE', 'PARTIALLY_FULFILLED')
         """
@@ -197,7 +197,7 @@ def upgrade() -> None:
         """
         CREATE INDEX ix_availabilities_risk_assessment
         ON availabilities (
-            seller_partner_id,
+            seller_id,
             estimated_trade_value,
             risk_precheck_status,
             status

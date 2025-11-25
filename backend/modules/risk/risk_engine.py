@@ -308,7 +308,7 @@ class RiskEngine:
         # ====================================================================
         party_link_check = await self.check_party_links(
             buyer_partner_id=requirement.buyer_partner_id,
-            seller_partner_id=availability.seller_partner_id
+            seller_partner_id=availability.seller_id
         )
         
         # ====================================================================
@@ -797,10 +797,10 @@ class RiskEngine:
             # User wants to BUY - check if they have open SELL for same commodity today
             query = select(Availability).where(
                 and_(
-                    Availability.seller_partner_id == partner_id,
+                    Availability.seller_id == partner_id,
                     Availability.commodity_id == commodity_id,
                     Availability.status.in_(['AVAILABLE', 'PARTIALLY_SOLD']),
-                    func.date(Availability.valid_from) == trade_date
+                    func.date(Availability.created_at) == trade_date
                 )
             )
             
@@ -818,8 +818,8 @@ class RiskEngine:
                     "existing_positions": [
                         {
                             "type": "SELL",
-                            "quantity": float(avail.quantity),
-                            "price": float(list(avail.price_options.values())[0]) if avail.price_options else None,
+                            "quantity": float(avail.total_quantity),
+                            "price": float(avail.base_price) if avail.base_price else None,
                             "status": avail.status,
                             "created_at": avail.created_at.isoformat()
                         }
@@ -838,7 +838,7 @@ class RiskEngine:
                     Requirement.buyer_partner_id == partner_id,
                     Requirement.commodity_id == commodity_id,
                     Requirement.status.in_(['DRAFT', 'ACTIVE', 'PARTIALLY_FULFILLED']),
-                    func.date(Requirement.valid_from) == trade_date
+                    func.date(Requirement.created_at) == trade_date
                 )
             )
             
