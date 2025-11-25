@@ -1166,3 +1166,54 @@ class RequirementRepository:
             "avg_preferred_price": row.avg_preferred_price or Decimal('0'),
             "active_requirement_count": row.requirement_count or 0
         }
+    
+    # ========================================================================
+    # LOCATION-AWARE QUERIES (FOR MATCHING ENGINE)
+    # ========================================================================
+    
+    async def search_by_delivery_locations(
+        self,
+        location_id: UUID,
+        commodity_id: Optional[UUID] = None,
+        status: str = "ACTIVE",
+        skip: int = 0,
+        limit: int = 100
+    ) -> List[Requirement]:
+        """
+        Find requirements that accept delivery at a specific location.
+        
+        Used by matching engine to find buyers for a seller's availability.
+        Queries JSONB delivery_locations array for location_id.
+        
+        Args:
+            location_id: Location UUID to search for
+            commodity_id: Optional commodity filter
+            status: Requirement status (default ACTIVE)
+            skip: Pagination offset
+            limit: Max results
+        
+        Returns:
+            List of requirements accepting this delivery location
+        """
+        from sqlalchemy.dialects.postgresql import JSONB
+        from sqlalchemy import cast, func
+        
+        # Query requirements where delivery_locations JSONB contains location_id
+        query = select(Requirement).where(
+            and_(
+                Requirement.status == status,
+                func.jsonb_path_exists(
+                    Requirement.delivery_locations,
+                    cast(f'$[*] ? (@.location_id == "{location_id}")', JSONB)
+                )
+            )
+        )
+        
+        if commodity_id:
+            query = query.where(Requirement.commodity_id == commodity_id)
+        
+        query = query.order_by(desc(Requirement.created_at))
+        query = query.offset(skip).limit(limit)
+        
+        result = await self.db.execute(query)
+        return list(result.scalars().all())

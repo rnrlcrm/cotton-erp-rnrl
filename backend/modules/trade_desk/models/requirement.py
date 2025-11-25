@@ -134,7 +134,7 @@ class Requirement(Base, EventMixin):
     # ========================================================================
     buyer_partner_id = Column(
         PostgreSQLUUID(as_uuid=True),
-        ForeignKey("partners.id", ondelete="RESTRICT"),
+        ForeignKey("business_partners.id", ondelete="RESTRICT"),
         nullable=False,
         index=True,
         comment='Buyer posting the requirement'
@@ -249,10 +249,10 @@ class Requirement(Base, EventMixin):
     )
     buyer_branch_id = Column(
         PostgreSQLUUID(as_uuid=True),
-        ForeignKey("branches.id", ondelete="SET NULL"),
+        ForeignKey("partner_locations.id", ondelete="SET NULL"),
         nullable=True,
         index=True,
-        comment='Buyer branch ID for internal trade blocking logic'
+        comment='Buyer branch/location ID (from partner_locations table) for internal trade blocking logic'
     )
     blocked_internal_trades = Column(
         Boolean,

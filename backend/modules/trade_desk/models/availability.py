@@ -139,9 +139,10 @@ class Availability(Base, EventMixin):
     seller_exposure_after_trade = Column(Numeric(18, 2), nullable=True)
     seller_branch_id = Column(
         PostgreSQLUUID(as_uuid=True),
-        ForeignKey("branches.id", ondelete="SET NULL"),
+        ForeignKey("partner_locations.id", ondelete="SET NULL"),
         nullable=True,
-        index=True
+        index=True,
+        comment='Seller branch/location ID (from partner_locations table) for internal trade blocking logic'
     )
     blocked_for_branches = Column(Boolean, default=False, nullable=False, index=True)
     seller_rating_score = Column(Numeric(3, 2), nullable=True)  # 0.00-5.00

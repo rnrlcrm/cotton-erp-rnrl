@@ -72,16 +72,11 @@ class BusinessPartner(Base, EventMixin):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     
     # ============================================
-    # DATA ISOLATION - Uses organization_id
-    # (NOT business_partner_id - this IS the BP table)
+    # NO ORGANIZATION_ID
+    # Business Partners are EXTERNAL entities (buyers, sellers, brokers, etc.)
+    # They are NOT tied to internal organization structure
+    # Organization is for internal company use only (commission billing, branches)
     # ============================================
-    organization_id = Column(
-        UUID(as_uuid=True),
-        ForeignKey("organizations.id", ondelete="RESTRICT"),
-        nullable=False,
-        index=True,
-        comment="Organization this partner belongs to (for data isolation)"
-    )
     
     # ============================================
     # PARTNER CLASSIFICATION
@@ -299,7 +294,7 @@ class BusinessPartner(Base, EventMixin):
     # ============================================
     # AUDIT TRAIL
     # ============================================
-    created_by = Column(UUID(as_uuid=True), nullable=False)
+    created_by = Column(UUID(as_uuid=True), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=text("NOW()"), nullable=False)
     updated_by = Column(UUID(as_uuid=True), nullable=True)
     updated_at = Column(DateTime(timezone=True), onupdate=datetime.utcnow, nullable=True)
@@ -307,7 +302,6 @@ class BusinessPartner(Base, EventMixin):
     # ============================================
     # RELATIONSHIPS
     # ============================================
-    organization = relationship("Organization", foreign_keys=[organization_id])
     locations = relationship("PartnerLocation", back_populates="partner", cascade="all, delete-orphan")
     employees = relationship("PartnerEmployee", back_populates="partner", cascade="all, delete-orphan")
     documents = relationship("PartnerDocument", back_populates="partner", cascade="all, delete-orphan")
@@ -328,7 +322,6 @@ class PartnerLocation(Base):
     
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     partner_id = Column(UUID(as_uuid=True), ForeignKey("business_partners.id", ondelete="CASCADE"), nullable=False)
-    organization_id = Column(UUID(as_uuid=True), ForeignKey("organizations.id"), nullable=False, index=True)
     
     location_type = Column(
         String(50),
@@ -366,7 +359,6 @@ class PartnerLocation(Base):
     updated_at = Column(DateTime(timezone=True), onupdate=datetime.utcnow)
     
     partner = relationship("BusinessPartner", back_populates="locations")
-    organization = relationship("Organization", foreign_keys=[organization_id])
 
 
 class PartnerEmployee(Base):
@@ -382,7 +374,7 @@ class PartnerEmployee(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     partner_id = Column(UUID(as_uuid=True), ForeignKey("business_partners.id", ondelete="CASCADE"), nullable=False)
     user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
-    organization_id = Column(UUID(as_uuid=True), ForeignKey("organizations.id"), nullable=False, index=True)
+    # organization_id removed - partner employees belong to external partner, not our internal organization
     
     employee_name = Column(String(200), nullable=False)
     employee_email = Column(String(200), nullable=False)
@@ -403,7 +395,6 @@ class PartnerEmployee(Base):
     activated_at = Column(DateTime(timezone=True), nullable=True)
     
     partner = relationship("BusinessPartner", back_populates="employees")
-    organization = relationship("Organization", foreign_keys=[organization_id])
 
 
 class PartnerDocument(Base):
@@ -415,7 +406,7 @@ class PartnerDocument(Base):
     
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     partner_id = Column(UUID(as_uuid=True), ForeignKey("business_partners.id", ondelete="CASCADE"), nullable=False)
-    organization_id = Column(UUID(as_uuid=True), ForeignKey("organizations.id"), nullable=False, index=True)
+    # organization_id removed - documents belong to external partner
     
     document_type = Column(
         String(100),
@@ -447,7 +438,6 @@ class PartnerDocument(Base):
     uploaded_at = Column(DateTime(timezone=True), server_default=text("NOW()"))
     
     partner = relationship("BusinessPartner", back_populates="documents")
-    organization = relationship("Organization", foreign_keys=[organization_id])
 
 
 class PartnerVehicle(Base):
@@ -459,7 +449,7 @@ class PartnerVehicle(Base):
     
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     partner_id = Column(UUID(as_uuid=True), ForeignKey("business_partners.id", ondelete="CASCADE"), nullable=False)
-    organization_id = Column(UUID(as_uuid=True), ForeignKey("organizations.id"), nullable=False, index=True)
+    # organization_id removed - vehicles belong to external partner (transporter)
     
     vehicle_number = Column(String(20), nullable=False, unique=True, index=True)
     vehicle_type = Column(String(50), nullable=False, comment="truck, trailer, container, etc.")
@@ -484,7 +474,6 @@ class PartnerVehicle(Base):
     created_at = Column(DateTime(timezone=True), server_default=text("NOW()"))
     
     partner = relationship("BusinessPartner", back_populates="vehicles")
-    organization = relationship("Organization", foreign_keys=[organization_id])
 
 
 class PartnerOnboardingApplication(Base):
@@ -497,7 +486,13 @@ class PartnerOnboardingApplication(Base):
     
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
-    organization_id = Column(UUID(as_uuid=True), ForeignKey("organizations.id"), nullable=False, index=True)
+    organization_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("organizations.id"),
+        nullable=True,
+        index=True,
+        comment="Auto-defaults to main company - used to track which company processed onboarding"
+    )
     
     # Same fields as BusinessPartner (copy-paste for simplicity)
     partner_type = Column(String(20), nullable=False)
@@ -578,7 +573,7 @@ class PartnerAmendment(Base):
     
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     partner_id = Column(UUID(as_uuid=True), ForeignKey("business_partners.id"), nullable=False)
-    organization_id = Column(UUID(as_uuid=True), ForeignKey("organizations.id"), nullable=False, index=True)
+    # organization_id removed - amendments track changes to external partner data
     
     amendment_type = Column(
         String(50),
@@ -602,8 +597,6 @@ class PartnerAmendment(Base):
     approved_at = Column(DateTime(timezone=True), nullable=True)
     
     chat_transcript = Column(JSON, nullable=True)
-    
-    organization = relationship("Organization", foreign_keys=[organization_id])
 
 
 class PartnerKYCRenewal(Base):
@@ -615,7 +608,7 @@ class PartnerKYCRenewal(Base):
     
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     partner_id = Column(UUID(as_uuid=True), ForeignKey("business_partners.id"), nullable=False)
-    organization_id = Column(UUID(as_uuid=True), ForeignKey("organizations.id"), nullable=False, index=True)
+    # organization_id removed - KYC renewals for external partners
     
     renewal_type = Column(String(20), default="annual", comment="annual, adhoc")
     renewal_due_date = Column(Date, nullable=False)
@@ -641,5 +634,3 @@ class PartnerKYCRenewal(Base):
     notes = Column(Text, nullable=True)
     
     created_at = Column(DateTime(timezone=True), server_default=text("NOW()"))
-    
-    organization = relationship("Organization", foreign_keys=[organization_id])

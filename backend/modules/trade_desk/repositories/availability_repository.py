@@ -672,3 +672,48 @@ class AvailabilityRepository:
         await self.db.flush()
         
         return len(availabilities)
+    
+    # ========================================================================
+    # LOCATION-AWARE QUERIES (FOR MATCHING ENGINE)
+    # ========================================================================
+    
+    async def search_by_location(
+        self,
+        location_id: UUID,
+        commodity_id: Optional[UUID] = None,
+        status: str = "ACTIVE",
+        skip: int = 0,
+        limit: int = 100
+    ) -> List[Availability]:
+        """
+        Find availabilities at a specific location.
+        
+        Used by matching engine to find sellers for a buyer's requirement.
+        Direct location_id filter.
+        
+        Args:
+            location_id: Location UUID
+            commodity_id: Optional commodity filter
+            status: Availability status (default ACTIVE)
+            skip: Pagination offset
+            limit: Max results
+        
+        Returns:
+            List of availabilities at this location
+        """
+        query = select(Availability).where(
+            and_(
+                Availability.location_id == location_id,
+                Availability.status == status,
+                Availability.is_deleted == False  # noqa: E712
+            )
+        )
+        
+        if commodity_id:
+            query = query.where(Availability.commodity_id == commodity_id)
+        
+        query = query.order_by(desc(Availability.created_at))
+        query = query.offset(skip).limit(limit)
+        
+        result = await self.db.execute(query)
+        return list(result.scalars().all())
