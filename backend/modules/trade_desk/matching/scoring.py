@@ -563,6 +563,71 @@ class MatchScorer:
             }
     
     # ========================================================================
+    # WARN PENALTY HELPER (for testing)
+    # ========================================================================
+    
+    def _apply_warn_penalty(
+        self,
+        base_score: float,
+        risk_details: Dict[str, Any]
+    ) -> tuple[float, bool, float]:
+        """
+        Apply WARN penalty to base score.
+        
+        Args:
+            base_score: Score before penalty
+            risk_details: Risk assessment details with risk_status
+            
+        Returns:
+            Tuple of (final_score, penalty_applied, penalty_value)
+        """
+        risk_status = risk_details.get("risk_status", "UNKNOWN")
+        
+        if risk_status == "WARN":
+            penalty_value = self.config.RISK_WARN_GLOBAL_PENALTY
+            final_score = base_score * (1.0 - penalty_value)
+            return (final_score, True, penalty_value)
+        else:
+            return (base_score, False, 0.0)
+    
+    # ========================================================================
+    # AI BOOST HELPER (for testing)
+    # ========================================================================
+    
+    def _apply_ai_boost(
+        self,
+        base_score: float,
+        availability: Availability
+    ) -> float:
+        """
+        Apply AI confidence boost to score.
+        
+        Args:
+            base_score: Score before boost
+            availability: Availability with ai_confidence_score
+            
+        Returns:
+            Final score with boost applied (capped at 1.0)
+        """
+        if not self.config.ENABLE_AI_SCORE_BOOST:
+            return base_score
+        
+        ai_confidence = availability.ai_confidence_score
+        if ai_confidence is None:
+            return base_score
+        
+        # Convert to float if Decimal
+        confidence_value = float(ai_confidence) if isinstance(ai_confidence, Decimal) else ai_confidence
+        
+        # Apply boost if confidence >= 80%
+        if confidence_value >= 0.8:
+            boost = self.config.AI_RECOMMENDATION_SCORE_BOOST
+            final_score = min(1.0, base_score + boost)
+            return final_score
+        
+        return base_score
+    
+    # ========================================================================
     # HELPER: HAVERSINE DISTANCE
     # ========================================================================
     

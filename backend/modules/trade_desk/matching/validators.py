@@ -443,6 +443,118 @@ class MatchValidator:
         
         return buyer_org_id == seller_org_id
     
+    async def validate_quantity_availability(
+        self,
+        requirement: Requirement,
+        availability: Availability
+    ) -> dict:
+        """
+        Validate if seller has sufficient quantity.
+        
+        Returns:
+            Dict with is_available, available_quantity, requested_quantity, etc.
+        """
+        buyer_min = requirement.min_quantity
+        buyer_preferred = requirement.preferred_quantity or buyer_min
+        seller_available = availability.available_quantity or Decimal("0.000")
+        
+        # Check minimum partial threshold (10%)
+        min_partial_pct = self.config.MIN_PARTIAL_QUANTITY_PERCENT
+        min_acceptable = buyer_min * Decimal(str(min_partial_pct))
+        
+        can_fulfill_full = seller_available >= buyer_preferred
+        meets_minimum = seller_available >= min_acceptable
+        
+        return {
+            "is_available": meets_minimum,
+            "available_quantity": seller_available,
+            "requested_quantity": buyer_preferred,
+            "can_fulfill_full": can_fulfill_full,
+            "partial_match": seller_available < buyer_preferred and seller_available >= buyer_min,
+            "below_minimum": seller_available < min_acceptable
+        }
+    
+    async def validate_internal_branch_trading(
+        self,
+        requirement: Requirement,
+        availability: Availability
+    ) -> dict:
+        """
+        Validate internal branch trading prevention.
+        
+        Returns:
+            Dict with is_allowed, is_internal_trade, blocked_reason
+        """
+        # Check if blocking is enabled
+        if not self._is_internal_branch_trading_blocked():
+            return {
+                "is_allowed": True,
+                "is_internal_trade": False,
+                "blocked_reason": None
+            }
+        
+        # Check if same branch
+        buyer_branch_id = getattr(requirement.buyer_partner, 'branch_id', None) if hasattr(requirement, 'buyer_partner') else None
+        seller_branch_id = availability.seller_branch_id
+        
+        if buyer_branch_id is None or seller_branch_id is None:
+            # Can't determine, allow by default
+            return {
+                "is_allowed": True,
+                "is_internal_trade": False,
+                "blocked_reason": None
+            }
+        
+        is_same_branch = buyer_branch_id == seller_branch_id
+        
+        if is_same_branch:
+            return {
+                "is_allowed": False,
+                "is_internal_trade": True,
+                "blocked_reason": "Internal branch trading blocked by configuration"
+            }
+        
+        return {
+            "is_allowed": True,
+            "is_internal_trade": False,
+            "blocked_reason": None
+        }
+    
+    async def validate_ai_requirements(
+        self,
+        availability: Availability
+    ) -> dict:
+        """
+        Validate AI confidence requirements.
+        
+        Returns:
+            Dict with meets_threshold, confidence_score, boost_eligible
+        """
+        ai_confidence = availability.ai_confidence_score
+        
+        if ai_confidence is None:
+            return {
+                "meets_threshold": False,
+                "confidence_score": None,
+                "boost_eligible": False
+            }
+        
+        # Convert to float if Decimal
+        confidence_value = float(ai_confidence) if isinstance(ai_confidence, Decimal) else ai_confidence
+        
+        # Check against threshold (60% default)
+        min_threshold = self.config.AI_MIN_CONFIDENCE_THRESHOLD / 100.0
+        meets_threshold = confidence_value >= min_threshold
+        
+        # Boost eligible if confidence >= 80%
+        boost_eligible = confidence_value >= 0.8
+        
+        return {
+            "meets_threshold": meets_threshold,
+            "confidence_score": ai_confidence,
+            "boost_eligible": boost_eligible
+        }
+    
     async def validate_batch_eligibility(
         self,
         requirement: Requirement,
