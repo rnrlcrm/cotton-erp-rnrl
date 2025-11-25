@@ -129,6 +129,17 @@ class MatchingConfig:
     BLOCK_INTERNAL_BRANCH_TRADING: bool = True  # Prevent circular trades
     
     # ========================================================================
+    # AI INTEGRATION SETTINGS (ENHANCEMENT #7)
+    # ========================================================================
+    
+    MIN_AI_CONFIDENCE_THRESHOLD: int = 60  # Minimum AI confidence % (0-100)
+    ENABLE_AI_PRICE_ALERTS: bool = True    # Honor AI price alerts in validation
+    ENABLE_AI_RECOMMENDATIONS: bool = True  # Consider AI pre-scored sellers
+    AI_PRICE_DEVIATION_WARN_PERCENT: float = 10.0  # Warn if >10% above AI price
+    ENABLE_AI_SCORE_BOOST: bool = True     # Boost score for AI-recommended sellers
+    AI_RECOMMENDATION_SCORE_BOOST: float = 0.05  # +5% boost for AI recommendations
+    
+    # ========================================================================
     # SAFETY CRON
     # ========================================================================
     
