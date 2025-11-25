@@ -294,7 +294,7 @@ class BusinessPartner(Base, EventMixin):
     # ============================================
     # AUDIT TRAIL
     # ============================================
-    created_by = Column(UUID(as_uuid=True), nullable=False)
+    created_by = Column(UUID(as_uuid=True), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=text("NOW()"), nullable=False)
     updated_by = Column(UUID(as_uuid=True), nullable=True)
     updated_at = Column(DateTime(timezone=True), onupdate=datetime.utcnow, nullable=True)

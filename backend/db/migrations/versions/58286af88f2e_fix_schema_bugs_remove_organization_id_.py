@@ -58,7 +58,13 @@ def upgrade() -> None:
                    nullable=True,
                    comment='Auto-defaults to main company - tracks which company processed onboarding')
     
-    # Step 5: Fix FK references in trade_desk module (if they exist)
+    # Step 5: Make business_partners.created_by nullable (audit field, optional in tests)
+    op.alter_column('business_partners', 'created_by',
+                   existing_type=sa.UUID(),
+                   nullable=True,
+                   comment='User who created the partner - optional')
+    
+    # Step 6: Fix FK references in trade_desk module (if they exist)
     # Note: These might not have explicit constraint names, so we'll use try/except in SQL
     op.execute("""
         DO $$
@@ -121,7 +127,12 @@ def downgrade() -> None:
                    existing_type=sa.UUID(),
                    nullable=False)
     
-    # Step 5: Rollback FK references in trade_desk module
+    # Step 5: Make business_partners.created_by non-nullable again
+    op.alter_column('business_partners', 'created_by',
+                   existing_type=sa.UUID(),
+                   nullable=False)
+    
+    # Step 6: Rollback FK references in trade_desk module
     op.execute("""
         DO $$
         BEGIN

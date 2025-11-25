@@ -33,8 +33,8 @@ class Location(Base, EventMixin):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     
     # Core Fields
-    name = Column(String(255), nullable=False, index=True)
-    google_place_id = Column(String(255), nullable=False, unique=True, index=True)  # Prevents duplicates
+    name = Column(String(255), nullable=False)
+    google_place_id = Column(String(255), nullable=False, unique=True)  # Prevents duplicates
     
     # Address Details (from Google Maps)
     address = Column(Text, nullable=True)
@@ -42,15 +42,15 @@ class Location(Base, EventMixin):
     longitude = Column(Float, nullable=True)
     
     # Location Breakdown (from Google Maps)
-    pincode = Column(String(20), nullable=True, index=True)
-    city = Column(String(100), nullable=True, index=True)
+    pincode = Column(String(20), nullable=True)
+    city = Column(String(100), nullable=True)
     district = Column(String(100), nullable=True)
-    state = Column(String(100), nullable=True, index=True)
+    state = Column(String(100), nullable=True)
     state_code = Column(String(10), nullable=True)  # MH, GJ, TN, etc.
     country = Column(String(100), nullable=True)
     
     # Auto-calculated Region
-    region = Column(String(50), nullable=True, index=True)  # WEST, SOUTH, NORTH, CENTRAL, EAST, NORTHEAST
+    region = Column(String(50), nullable=True)  # WEST, SOUTH, NORTH, CENTRAL, EAST, NORTHEAST
     
     # Status
     is_active = Column(Boolean, nullable=False, default=True)

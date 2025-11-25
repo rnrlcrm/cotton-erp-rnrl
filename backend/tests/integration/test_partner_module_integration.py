@@ -25,6 +25,7 @@ from backend.modules.partners.models import (
     PartnerVehicle,
     PartnerOnboardingApplication,
 )
+from .conftest import create_test_partner
 
 
 class TestBusinessPartnerCRUD:
@@ -35,14 +36,7 @@ class TestBusinessPartnerCRUD:
         self, db_session: AsyncSession
     ):
         """✅ Test: Create BusinessPartner WITHOUT organization_id (external entity)."""
-        partner = BusinessPartner(
-            id=uuid.uuid4(),
-            partner_type="buyer",
-            legal_name="External Buyer Corp",
-            country="India",
-            primary_currency="INR",
-            status="active"
-        )
+        partner = create_test_partner("buyer", "External Buyer Corp")
         
         db_session.add(partner)
         await db_session.flush()
@@ -55,6 +49,7 @@ class TestBusinessPartnerCRUD:
         
         assert created_partner.legal_name == "External Buyer Corp"
         assert created_partner.partner_type == "buyer"
+        assert created_partner.bank_account_name == "External Buyer Corp"
         # Verify NO organization_id attribute
         assert not hasattr(created_partner, 'organization_id')
     
@@ -63,14 +58,8 @@ class TestBusinessPartnerCRUD:
         self, db_session: AsyncSession
     ):
         """✅ Test: Update BusinessPartner."""
-        partner = BusinessPartner(
-            id=uuid.uuid4(),
-            partner_type="seller",
-            legal_name="Seller Corp",
-            country="India",
-            primary_currency="INR",
-            status="pending"
-        )
+        partner = create_test_partner("seller", "Seller Corp")
+        partner.status = "pending"
         
         db_session.add(partner)
         await db_session.flush()
@@ -94,14 +83,7 @@ class TestBusinessPartnerCRUD:
         self, db_session: AsyncSession
     ):
         """✅ Test: Deleting BusinessPartner cascades to PartnerLocations."""
-        partner = BusinessPartner(
-            id=uuid.uuid4(),
-            partner_type="buyer",
-            legal_name="Test Partner",
-            country="India",
-            primary_currency="INR",
-            status="active"
-        )
+        partner = create_test_partner("buyer", "Test Partner")
         db_session.add(partner)
         await db_session.flush()
         
@@ -138,14 +120,7 @@ class TestPartnerLocationCRUD:
         self, db_session: AsyncSession
     ):
         """✅ Test: Create PartnerLocation WITHOUT organization_id."""
-        partner = BusinessPartner(
-            id=uuid.uuid4(),
-            partner_type="seller",
-            legal_name="Seller With Branches",
-            country="India",
-            primary_currency="INR",
-            status="active"
-        )
+        partner = create_test_partner("seller", "Seller With Branches")
         db_session.add(partner)
         await db_session.flush()
         
@@ -181,14 +156,7 @@ class TestPartnerLocationCRUD:
         self, db_session: AsyncSession
     ):
         """✅ Test: Partner can have multiple locations."""
-        partner = BusinessPartner(
-            id=uuid.uuid4(),
-            partner_type="transporter",
-            legal_name="Multi-Location Transporter",
-            country="India",
-            primary_currency="INR",
-            status="active"
-        )
+        partner = create_test_partner("transporter", "Multi-Location Transporter")
         db_session.add(partner)
         await db_session.flush()
         
@@ -240,14 +208,7 @@ class TestPartnerEmployeeCRUD:
         from backend.modules.settings.models.settings_models import User
         
         # Create partner
-        partner = BusinessPartner(
-            id=uuid.uuid4(),
-            partner_type="buyer",
-            legal_name="Buyer With Employees",
-            country="India",
-            primary_currency="INR",
-            status="active"
-        )
+        partner = create_test_partner("buyer", "Buyer With Employees")
         db_session.add(partner)
         await db_session.flush()
         
@@ -298,14 +259,7 @@ class TestPartnerDocumentCRUD:
         self, db_session: AsyncSession
     ):
         """✅ Test: Create PartnerDocument WITHOUT organization_id."""
-        partner = BusinessPartner(
-            id=uuid.uuid4(),
-            partner_type="seller",
-            legal_name="Seller With Documents",
-            country="India",
-            primary_currency="INR",
-            status="active"
-        )
+        partner = create_test_partner("seller", "Seller With Documents")
         db_session.add(partner)
         await db_session.flush()
         
@@ -342,14 +296,7 @@ class TestPartnerVehicleCRUD:
         self, db_session: AsyncSession
     ):
         """✅ Test: Create PartnerVehicle WITHOUT organization_id."""
-        partner = BusinessPartner(
-            id=uuid.uuid4(),
-            partner_type="transporter",
-            legal_name="Transporter With Fleet",
-            country="India",
-            primary_currency="INR",
-            status="active"
-        )
+        partner = create_test_partner("transporter", "Transporter With Fleet")
         db_session.add(partner)
         await db_session.flush()
         
@@ -387,10 +334,11 @@ class TestPartnerOnboardingApplication:
         """✅ Test: Create onboarding application with NULL organization_id (auto-defaults to main)."""
         from backend.modules.settings.models.settings_models import User
         
-        # Create user
+        # Create user (INTERNAL type - pre-signup user applying for partner status)
         user = User(
             id=uuid.uuid4(),
-            user_type="EXTERNAL",
+            user_type="INTERNAL",
+            organization_id=seed_organization.id,
             mobile_number="+919999999999",
             full_name="New Applicant",
             is_active=True,
@@ -443,10 +391,11 @@ class TestPartnerOnboardingApplication:
         """✅ Test: Create onboarding application WITH organization_id (tracks which company processed it)."""
         from backend.modules.settings.models.settings_models import User
         
-        # Create user
+        # Create user (INTERNAL type - pre-signup user applying for partner status)
         user = User(
             id=uuid.uuid4(),
-            user_type="EXTERNAL",
+            user_type="INTERNAL",
+            organization_id=seed_organization.id,
             mobile_number="+918888888888",
             full_name="Another Applicant",
             is_active=True,

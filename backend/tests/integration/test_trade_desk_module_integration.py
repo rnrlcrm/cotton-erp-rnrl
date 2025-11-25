@@ -18,6 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from backend.modules.trade_desk.models.requirement import Requirement
 from backend.modules.trade_desk.models.availability import Availability
 from backend.modules.partners.models import BusinessPartner, PartnerLocation
+from .conftest import create_test_partner
 
 
 class TestRequirementFKFixes:
@@ -29,14 +30,7 @@ class TestRequirementFKFixes:
     ):
         """✅ Test: Requirement.buyer_partner_id correctly references business_partners.id."""
         # Create buyer partner
-        buyer = BusinessPartner(
-            id=uuid.uuid4(),
-            partner_type="buyer",
-            legal_name="Buyer Corp",
-            country="India",
-            primary_currency="INR",
-            status="active"
-        )
+        buyer = create_test_partner("buyer", "Cotton Buyer Ltd")
         db_session.add(buyer)
         await db_session.flush()
         
@@ -71,14 +65,7 @@ class TestRequirementFKFixes:
     ):
         """✅ Test: Requirement.buyer_branch_id correctly references partner_locations.id."""
         # Create buyer partner
-        buyer = BusinessPartner(
-            id=uuid.uuid4(),
-            partner_type="buyer",
-            legal_name="Multi-Branch Buyer",
-            country="India",
-            primary_currency="INR",
-            status="active"
-        )
+        buyer = create_test_partner("buyer", "Multi-Branch Buyer")
         db_session.add(buyer)
         await db_session.flush()
         
@@ -129,14 +116,7 @@ class TestRequirementFKFixes:
     ):
         """✅ Test: Deleting BusinessPartner handles requirement FK correctly."""
         # Create buyer
-        buyer = BusinessPartner(
-            id=uuid.uuid4(),
-            partner_type="buyer",
-            legal_name="Temporary Buyer",
-            country="India",
-            primary_currency="INR",
-            status="active"
-        )
+        buyer = create_test_partner("buyer", "Temporary Buyer")
         db_session.add(buyer)
         await db_session.flush()
         
@@ -178,14 +158,7 @@ class TestAvailabilityFKFixes:
     ):
         """✅ Test: Availability.seller_branch_id correctly references partner_locations.id."""
         # Create seller partner
-        seller = BusinessPartner(
-            id=uuid.uuid4(),
-            partner_type="seller",
-            legal_name="Multi-Branch Seller",
-            country="India",
-            primary_currency="INR",
-            status="active"
-        )
+        seller = create_test_partner("seller", "Multi-Branch Seller")
         db_session.add(seller)
         await db_session.flush()
         
@@ -237,14 +210,7 @@ class TestAvailabilityFKFixes:
     ):
         """✅ Test: Deleting PartnerLocation handles availability FK correctly."""
         # Create seller
-        seller = BusinessPartner(
-            id=uuid.uuid4(),
-            partner_type="seller",
-            legal_name="Seller With Branch",
-            country="India",
-            primary_currency="INR",
-            status="active"
-        )
+        seller = create_test_partner("seller", "Seller With Branch")
         db_session.add(seller)
         await db_session.flush()
         
@@ -302,14 +268,7 @@ class TestTradeDeskCompleteWorkflow:
     ):
         """✅ Test: Complete workflow - buyer requirement + seller availability with correct FKs."""
         # Create buyer
-        buyer = BusinessPartner(
-            id=uuid.uuid4(),
-            partner_type="buyer",
-            legal_name="Cotton Buyer Ltd",
-            country="India",
-            primary_currency="INR",
-            status="active"
-        )
+        buyer = create_test_partner("buyer", "Cotton Buyer Ltd")
         db_session.add(buyer)
         
         # Create buyer branch
@@ -326,14 +285,7 @@ class TestTradeDeskCompleteWorkflow:
         db_session.add(buyer_branch)
         
         # Create seller
-        seller = BusinessPartner(
-            id=uuid.uuid4(),
-            partner_type="seller",
-            legal_name="Cotton Seller Corp",
-            country="India",
-            primary_currency="INR",
-            status="active"
-        )
+        seller = create_test_partner("seller", "Cotton Seller Corp")
         db_session.add(seller)
         
         # Create seller branch
