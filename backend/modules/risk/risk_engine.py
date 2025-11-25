@@ -638,8 +638,8 @@ class RiskEngine:
         Check if buyer and seller are linked (same ownership/entity).
         
         Option B Implementation:
-        - Same PAN/GST → BLOCK (CRITICAL violations)
-        - Same mobile/bank → WARN (allow with manual approval)
+        - Same PAN/Tax ID → BLOCK (CRITICAL violations)
+        - Same mobile/email → WARN (allow with manual approval)
         
         Args:
             buyer_partner_id: Buyer's partner UUID
@@ -689,14 +689,14 @@ class RiskEngine:
             })
             max_severity = "BLOCK"
         
-        # Check 2: Same GST Number
-        if buyer.gst_number and seller.gst_number and buyer.gst_number == seller.gst_number:
+        # Check 2: Same Tax ID (GST/TIN/EIN/etc.)
+        if buyer.tax_id_number and seller.tax_id_number and buyer.tax_id_number == seller.tax_id_number:
             violations.append({
-                "type": "SAME_GST",
+                "type": "SAME_TAX_ID",
                 "severity": "BLOCK",
-                "field": "GST Number",
-                "value": buyer.gst_number,
-                "message": f"BLOCKED: Buyer and seller have same GST number ({buyer.gst_number}). This indicates same legal entity."
+                "field": "Tax ID Number",
+                "value": buyer.tax_id_number,
+                "message": f"BLOCKED: Buyer and seller have same tax ID number ({buyer.tax_id_number}). This indicates same legal entity."
             })
             max_severity = "BLOCK"
         
@@ -744,7 +744,7 @@ class RiskEngine:
         # Determine recommended action
         # ====================================================================
         if max_severity == "BLOCK":
-            recommended_action = "REJECT: Trade blocked due to party link violations (same PAN/GST)"
+            recommended_action = "REJECT: Trade blocked due to party link violations (same PAN/Tax ID)"
         elif max_severity == "WARN":
             recommended_action = "REVIEW: Trade requires manual approval due to party links (same mobile/email)"
         else:
