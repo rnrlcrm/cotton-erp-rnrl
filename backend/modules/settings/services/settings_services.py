@@ -167,6 +167,38 @@ class AuthService:
 			token_row.revoked = True
 			self.db.add(token_row)
 
+	async def logout_all_devices(self, user_id: str) -> int:
+		"""
+		Logout user from all devices by revoking all refresh tokens.
+		Returns the number of tokens revoked.
+		"""
+		from uuid import UUID
+		
+		# Revoke all non-revoked refresh tokens for this user
+		result = await self.db.execute(
+			select(RefreshToken).where(
+				RefreshToken.user_id == UUID(user_id),
+				RefreshToken.revoked == False
+			)
+		)
+		tokens = result.scalars().all()
+		
+		count = 0
+		for token in tokens:
+			token.revoked = True
+			self.db.add(token)
+			count += 1
+		
+		await self.db.flush()
+		return count
+
+	async def revoke_all_sessions(self, user_id: str) -> None:
+		"""
+		Revoke all sessions for a user (called on password change).
+		This forces re-authentication on all devices.
+		"""
+		await self.logout_all_devices(user_id)
+
 	async def create_sub_user(
 		self,
 		parent_user_id: str,

@@ -7,9 +7,13 @@ import redis.asyncio as redis
 
 from backend.core.audit import audit_log
 from backend.db.async_session import get_db
+from backend.app.middleware.rate_limit import limiter
+from backend.core.security.account_lockout import AccountLockoutService
 from backend.modules.settings.schemas.settings_schemas import (
     LoginRequest,
     SignupRequest,
+    InternalUserSignupRequest,
+    ChangePasswordRequest,
     TokenResponse,
     UserOut,
     CreateSubUserRequest,
@@ -53,7 +57,9 @@ def health() -> dict:
 
 
 @router.post("/auth/signup", response_model=UserOut, tags=["auth"])
+# @limiter.limit("5/minute")  # Prevent signup abuse - TEMP DISABLED FOR TESTING
 async def signup(payload: SignupRequest, db: AsyncSession = Depends(get_db)) -> UserOut:
+    """Generic signup - password policy NOT enforced here. Use /auth/signup-internal for INTERNAL users."""
     svc = AuthService(db)
     try:
         user = await svc.signup(payload.email, payload.password, payload.full_name)
@@ -71,8 +77,48 @@ async def signup(payload: SignupRequest, db: AsyncSession = Depends(get_db)) -> 
     )
 
 
+@router.post("/auth/signup-internal", response_model=UserOut, tags=["auth"])
+# @limiter.limit("5/minute")  # Prevent signup abuse - TEMP DISABLED FOR TESTING
+async def signup_internal(
+    payload: InternalUserSignupRequest,
+    db: AsyncSession = Depends(get_db)
+) -> UserOut:
+    """Signup for INTERNAL users with enforced password policy."""
+    svc = AuthService(db)
+    try:
+        user = await svc.signup(payload.email, payload.password, payload.full_name)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    audit_log("user.signup_internal", None, "user", str(user.id), {"email": user.email})
+    return UserOut(
+        id=str(user.id),
+        email=user.email,
+        full_name=user.full_name,
+        organization_id=str(user.organization_id),
+        is_active=user.is_active,
+        created_at=user.created_at,
+        updated_at=user.updated_at,
+    )
+
+
 @router.post("/auth/login", tags=["auth"])
-async def login(payload: LoginRequest, db: AsyncSession = Depends(get_db)) -> TokenResponse | LoginWith2FAResponse:
+# @limiter.limit("10/minute")  # Prevent brute force attacks - TEMP DISABLED FOR TESTING
+async def login(
+    payload: LoginRequest,
+    db: AsyncSession = Depends(get_db),
+    redis_client: redis.Redis = Depends(get_redis)
+) -> TokenResponse | LoginWith2FAResponse:
+    # Initialize account lockout service
+    lockout_service = AccountLockoutService(redis_client)
+    
+    # Check if account is locked
+    is_locked, ttl = await lockout_service.is_locked(payload.email)
+    if is_locked:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=f"Account locked due to too many failed login attempts. Try again in {ttl // 60} minutes."
+        )
+    
     svc = AuthService(db)
     try:
         # Check if user exists and validate password
@@ -81,11 +127,23 @@ async def login(payload: LoginRequest, db: AsyncSession = Depends(get_db)) -> To
         user = await user_repo.get_by_email(payload.email)
         
         if not user:
+            # Record failed attempt
+            lockout_info = await lockout_service.record_failed_attempt(payload.email)
             raise ValueError("Invalid credentials")
         if not user.is_active:
             raise ValueError("User account is inactive")
         if not svc.hasher.verify(payload.password, user.password_hash):
-            raise ValueError("Invalid credentials")
+            # Record failed attempt
+            lockout_info = await lockout_service.record_failed_attempt(payload.email)
+            if lockout_info["locked"]:
+                raise HTTPException(
+                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                    detail=lockout_info["message"]
+                )
+            raise ValueError(f"Invalid credentials. {lockout_info['remaining_attempts']} attempts remaining.")
+        
+        # Clear failed attempts on successful password verification
+        await lockout_service.clear_failed_attempts(payload.email)
         
         # Check if 2FA is enabled
         if user.two_fa_enabled:
@@ -125,7 +183,35 @@ async def logout(token: str, db: AsyncSession = Depends(get_db)) -> dict:
     return {"message": "Logged out successfully"}
 
 
+@router.post("/auth/logout-all", tags=["auth"])
+async def logout_all_devices(
+    request: Request,
+    current_user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+) -> dict:
+    """
+    Logout user from all devices by revoking all refresh tokens.
+    Useful for security incidents or when user wants to terminate all sessions.
+    """
+    svc = AuthService(db)
+    user_id = current_user["sub"]
+    
+    try:
+        count = await svc.logout_all_devices(user_id)
+        audit_log("user.logout_all", user_id, "security", user_id, {"tokens_revoked": count})
+        return {
+            "message": f"Logged out from all devices successfully",
+            "tokens_revoked": count
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to logout from all devices: {str(e)}"
+        )
+
+
 @router.post("/auth/send-otp", response_model=OTPResponse, tags=["auth"])
+# @limiter.limit("3/minute")  # Prevent OTP spam - TEMP DISABLED FOR TESTING
 async def send_otp_for_external_user(
     payload: SendOTPRequest,
     redis_client: redis.Redis = Depends(get_redis)
@@ -168,6 +254,7 @@ async def send_otp_for_external_user(
 
 
 @router.post("/auth/verify-otp", response_model=TokenResponse, tags=["auth"])
+# @limiter.limit("10/minute")  # Prevent OTP brute force - TEMP DISABLED FOR TESTING
 async def verify_otp_for_external_user(
     payload: VerifyOTPRequest,
     redis_client: redis.Redis = Depends(get_redis),
