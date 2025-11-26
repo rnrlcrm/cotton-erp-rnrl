@@ -67,7 +67,7 @@ class TestExternalUserOTPLogin:
         """✅ Test: EXTERNAL user can login with valid OTP."""
         # Create EXTERNAL user (business partner) - mobile ONLY, NO email/password
         external_user = User(
-            mobile_number="+919876543211",
+            mobile_number="+919876500001",  # Unique number to avoid DB collision
             full_name="External Partner User",
             user_type="EXTERNAL",
             business_partner_id=seed_business_partner.id,
@@ -94,7 +94,7 @@ class TestExternalUserOTPLogin:
                 response = await async_client.post(
                     "/api/v1/settings/auth/verify-otp",
                     json={
-                        "mobile_number": "+919876543211",
+                        "mobile_number": "+919876500001",
                         "otp": "123456"
                     }
                 )
