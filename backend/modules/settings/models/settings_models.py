@@ -99,6 +99,14 @@ class User(Base, EventMixin):
 		nullable=True,
 		comment="For INTERNAL users only"
 	)
+	
+	# Sub-User Fields (Phase 2)
+	parent_user_id: Mapped[uuid.UUID | None] = mapped_column(
+		UUID(as_uuid=True),
+		ForeignKey("users.id", ondelete="CASCADE"),
+		nullable=True,
+		comment="Parent user ID for sub-users (max 2 per parent)"
+	)
 	allowed_modules: Mapped[list[str] | None] = mapped_column(
 		ARRAY(String),
 		nullable=True,

@@ -46,6 +46,7 @@ SKIP_AUTH_PATHS = {
     "/api/v1/settings/auth/refresh",
     "/api/v1/settings/auth/logout",
     "/api/v1/settings/auth/me",  # Uses its own get_current_user dependency
+    "/api/v1/settings/auth/sub-users",  # Uses its own get_current_user dependency
     "/api/v1/partners/onboarding",  # Onboarding endpoints use token with mobile as subject
 }
 
@@ -163,6 +164,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
             "/static",
             "/api/v1/partners/onboarding",
             "/api/v1/auth",
+            "/api/v1/settings/auth",  # All settings auth endpoints use get_current_user dependency
         ]
         for prefix in skip_prefixes:
             if path.startswith(prefix):

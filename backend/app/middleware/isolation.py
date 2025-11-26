@@ -83,6 +83,7 @@ class DataIsolationMiddleware(BaseHTTPMiddleware):
         '/api/v1/settings/auth/refresh',
         '/api/v1/settings/auth/logout',
         '/api/v1/settings/auth/me',  # User info endpoint (has its own auth)
+        '/api/v1/settings/auth/sub-users',  # Sub-user management (has its own auth)
         '/api/v1/partners/onboarding',  # Onboarding endpoints (user doesn't have business_partner_id yet)
     ]
     
@@ -180,6 +181,7 @@ class DataIsolationMiddleware(BaseHTTPMiddleware):
         skip_prefixes = [
             "/api/v1/partners/onboarding",
             "/api/v1/auth",
+            "/api/v1/settings/auth",  # All settings auth endpoints
         ]
         return any(path.startswith(prefix) for prefix in skip_prefixes)
     

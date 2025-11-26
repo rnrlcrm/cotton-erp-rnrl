@@ -158,3 +158,51 @@ class AuthService:
 			token_row.revoked = True
 			self.db.add(token_row)
 
+	async def create_sub_user(
+		self,
+		parent_user_id: str,
+		email: str,
+		password: str,
+		full_name: str,
+		role: Optional[str] = None
+	) -> User:
+		"""Create a sub-user for the authenticated parent user."""
+		from uuid import UUID
+		
+		# Check if email already exists
+		if await self.user_repo.get_by_email(email):
+			raise ValueError("Email already registered")
+		
+		# Hash password
+		hashed = self.hasher.hash(password)
+		
+		# Create sub-user (repository enforces max 2 limit and no recursive sub-users)
+		sub_user = await self.user_repo.create_sub_user(
+			parent_user_id=UUID(parent_user_id),
+			email=email,
+			full_name=full_name,
+			password_hash=hashed,
+			role=role
+		)
+		await self.db.flush()
+		return sub_user
+
+	async def get_sub_users(self, parent_user_id: str) -> list[User]:
+		"""Get all sub-users for a parent user."""
+		from uuid import UUID
+		return await self.user_repo.get_sub_users(UUID(parent_user_id))
+
+	async def delete_sub_user(self, parent_user_id: str, sub_user_id: str) -> None:
+		"""Delete a sub-user (only if owned by parent)."""
+		from uuid import UUID
+		
+		sub_user = await self.user_repo.get_by_id(UUID(sub_user_id))
+		if not sub_user:
+			raise ValueError("Sub-user not found")
+		
+		if str(sub_user.parent_user_id) != parent_user_id:
+			raise ValueError("You can only delete your own sub-users")
+		
+		await self.db.delete(sub_user)
+		await self.db.flush()
+

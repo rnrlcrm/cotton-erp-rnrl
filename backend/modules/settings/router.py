@@ -5,7 +5,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.core.audit import audit_log
 from backend.db.async_session import get_db
-from backend.modules.settings.schemas.settings_schemas import LoginRequest, SignupRequest, TokenResponse, UserOut
+from backend.modules.settings.schemas.settings_schemas import (
+    LoginRequest,
+    SignupRequest,
+    TokenResponse,
+    UserOut,
+    CreateSubUserRequest,
+    SubUserOut,
+)
 from backend.modules.settings.services.settings_services import AuthService
 from backend.core.auth.deps import get_current_user
 from backend.modules.settings.organization.router import router as organization_router
@@ -82,6 +89,82 @@ def me(user=Depends(get_current_user)) -> UserOut:  # noqa: ANN001
         full_name=user.full_name,
         organization_id=str(user.organization_id),
         is_active=user.is_active,
+        parent_user_id=str(user.parent_user_id) if user.parent_user_id else None,
+        role=user.role,
         created_at=user.created_at,
         updated_at=user.updated_at,
     )
+
+
+@router.post("/auth/sub-users", response_model=SubUserOut, status_code=status.HTTP_201_CREATED, tags=["auth", "sub-users"])
+async def create_sub_user(
+    payload: CreateSubUserRequest,
+    user=Depends(get_current_user),  # noqa: ANN001
+    db: AsyncSession = Depends(get_db)
+) -> SubUserOut:
+    """Create a sub-user (max 2 per parent)."""
+    svc = AuthService(db)
+    try:
+        sub_user = await svc.create_sub_user(
+            parent_user_id=str(user.id),
+            email=payload.email,
+            password=payload.password,
+            full_name=payload.full_name,
+            role=payload.role
+        )
+        await db.commit()
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    
+    audit_log("sub_user.created", str(user.id), "user", str(sub_user.id), {"email": sub_user.email})
+    return SubUserOut(
+        id=str(sub_user.id),
+        email=sub_user.email,
+        full_name=sub_user.full_name,
+        role=sub_user.role,
+        is_active=sub_user.is_active,
+        parent_user_id=str(sub_user.parent_user_id),
+        created_at=sub_user.created_at,
+        updated_at=sub_user.updated_at,
+    )
+
+
+@router.get("/auth/sub-users", response_model=list[SubUserOut], tags=["auth", "sub-users"])
+async def list_sub_users(
+    user=Depends(get_current_user),  # noqa: ANN001
+    db: AsyncSession = Depends(get_db)
+) -> list[SubUserOut]:
+    """List all sub-users for the authenticated parent user."""
+    svc = AuthService(db)
+    sub_users = await svc.get_sub_users(str(user.id))
+    
+    return [
+        SubUserOut(
+            id=str(su.id),
+            email=su.email,
+            full_name=su.full_name,
+            role=su.role,
+            is_active=su.is_active,
+            parent_user_id=str(su.parent_user_id),
+            created_at=su.created_at,
+            updated_at=su.updated_at,
+        )
+        for su in sub_users
+    ]
+
+
+@router.delete("/auth/sub-users/{sub_user_id}", status_code=status.HTTP_204_NO_CONTENT, tags=["auth", "sub-users"])
+async def delete_sub_user(
+    sub_user_id: str,
+    user=Depends(get_current_user),  # noqa: ANN001
+    db: AsyncSession = Depends(get_db)
+):
+    """Delete a sub-user (only your own sub-users)."""
+    svc = AuthService(db)
+    try:
+        await svc.delete_sub_user(str(user.id), sub_user_id)
+        await db.commit()
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
+    
+    audit_log("sub_user.deleted", str(user.id), "user", sub_user_id, {})
