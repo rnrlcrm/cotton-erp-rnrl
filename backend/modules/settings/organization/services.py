@@ -80,10 +80,9 @@ class OrganizationService:
                 user_id=self.current_user_id,
                 data={
                     "name": org.name,
-                    "type": org.type.value if org.type else None,
-                    "category": org.category.value if org.category else None,
-                    "email": org.email,
-                    "phone": org.phone,
+                    "type": org.type if org.type else None,
+                    "contact_email": org.contact_email,
+                    "contact_phone": org.contact_phone,
                 },
             )
         )
@@ -318,7 +317,6 @@ class OrganizationService:
                 user_id=self.current_user_id,
                 data={
                     "fy_id": str(fy.id),
-                    "year": fy.year,
                     "start_date": fy.start_date.isoformat(),
                     "end_date": fy.end_date.isoformat(),
                     "is_active": fy.is_active,
@@ -392,7 +390,7 @@ class OrganizationService:
                     "series_id": str(series.id),
                     "document_type": series.document_type,
                     "prefix": series.prefix,
-                    "starting_number": series.starting_number,
+                    "current_number": series.current_number,
                 },
             )
         )

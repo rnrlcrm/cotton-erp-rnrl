@@ -28,8 +28,19 @@ from backend.modules.settings.organization.services import OrganizationService
 router = APIRouter(prefix="/organizations", tags=["organizations"])
 
 
-async def get_service(db: AsyncSession = Depends(get_db)) -> OrganizationService:
-    return OrganizationService(db)
+# Dependency for current user (mock for now)
+def get_current_user_id() -> UUID:
+    """Get current user ID from auth context"""
+    # TODO: Replace with actual auth dependency
+    from uuid import uuid4
+    return uuid4()
+
+
+async def get_service(
+    db: AsyncSession = Depends(get_db),
+    user_id: UUID = Depends(get_current_user_id)
+) -> OrganizationService:
+    return OrganizationService(db, user_id)
 
 
 # Organization endpoints
