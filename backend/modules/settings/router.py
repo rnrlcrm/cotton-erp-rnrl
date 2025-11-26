@@ -112,7 +112,6 @@ async def create_sub_user(
             full_name=payload.full_name,
             role=payload.role
         )
-        await db.commit()
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     
@@ -163,7 +162,6 @@ async def delete_sub_user(
     svc = AuthService(db)
     try:
         await svc.delete_sub_user(str(user.id), sub_user_id)
-        await db.commit()
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
     

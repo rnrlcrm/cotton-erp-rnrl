@@ -39,7 +39,7 @@ class TestSubUserCreation:
             is_active=True
         )
         db_session.add(parent)
-        await db_session.flush()
+        await db_session.flush()  # Flush is enough for login to see it
 
         # Login as parent
         login_response = await async_client.post(
@@ -88,7 +88,7 @@ class TestSubUserCreation:
             is_active=True
         )
         db_session.add(parent)
-        await db_session.flush()
+        await db_session.flush()  # Flush is enough for login
 
         # Login as parent
         login_response = await async_client.post(
@@ -109,7 +109,7 @@ class TestSubUserCreation:
         )
         assert response1.status_code == 201
 
-        # Create second sub-user
+        # Create second sub-user (will now see first one in DB)
         response2 = await async_client.post(
             "/api/v1/settings/auth/sub-users",
             json={
@@ -139,7 +139,7 @@ class TestSubUserCreation:
             is_active=True
         )
         db_session.add(parent)
-        await db_session.flush()
+        await db_session.flush()  # Flush so login endpoint can see parent
 
         # Login as parent
         login_response = await async_client.post(
@@ -189,7 +189,7 @@ class TestSubUserCreation:
             is_active=True
         )
         db_session.add(parent)
-        await db_session.flush()
+        await db_session.flush()  # Flush so login endpoint can see parent
 
         # Login as parent and create sub-user
         login_response = await async_client.post(
@@ -238,7 +238,7 @@ class TestSubUserCreation:
             is_active=True
         )
         db_session.add(parent)
-        await db_session.flush()
+        await db_session.flush()  # Flush so login endpoint can see parent
 
         # Login as parent
         login_response = await async_client.post(
@@ -285,7 +285,7 @@ class TestSubUserListing:
             is_active=True
         )
         db_session.add(parent)
-        await db_session.flush()
+        await db_session.flush()  # Flush so login endpoint can see parent
 
         # Login as parent
         login_response = await async_client.post(
@@ -320,7 +320,7 @@ class TestSubUserListing:
             is_active=True
         )
         db_session.add(parent)
-        await db_session.flush()
+        await db_session.flush()  # Flush so login endpoint can see parent
 
         # Login as parent
         login_response = await async_client.post(
@@ -381,7 +381,7 @@ class TestSubUserDeletion:
             is_active=True
         )
         db_session.add(parent)
-        await db_session.flush()
+        await db_session.flush()  # Flush so login endpoint can see parent
 
         # Login as parent
         login_response = await async_client.post(
@@ -438,7 +438,7 @@ class TestSubUserDeletion:
         )
         db_session.add(parent1)
         db_session.add(parent2)
-        await db_session.flush()
+        await db_session.flush()  # Flush so login endpoint can see parent
 
         # Login as parent1 and create sub-user
         login1 = await async_client.post(
@@ -490,7 +490,7 @@ class TestSubUserLogin:
             is_active=True
         )
         db_session.add(parent)
-        await db_session.flush()
+        await db_session.flush()  # Flush so login endpoint can see parent
 
         # Login as parent and create sub-user
         parent_login = await async_client.post(
