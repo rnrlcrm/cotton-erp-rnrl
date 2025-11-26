@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sess
 from sqlalchemy.pool import NullPool
 from testcontainers.postgres import PostgresContainer
 
+from backend.db.async_session import get_db
 
 # Configure password hashing for tests (avoid bcrypt 5.0.0 compatibility issues)
 os.environ.setdefault("PASSWORD_SCHEME", "pbkdf2_sha256")
@@ -445,7 +446,6 @@ async def async_client(db_session: AsyncSession) -> AsyncGenerator:
     """
     from httpx import AsyncClient, ASGITransport
     from backend.app.main import app
-    from backend.db import get_db
     
     # Override database dependency to use test session
     async def override_get_db():

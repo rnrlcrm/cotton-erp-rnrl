@@ -75,7 +75,7 @@ async def logout(token: str, db: AsyncSession = Depends(get_db)) -> dict:
     return {"message": "Logged out successfully"}
 
 @router.get("/auth/me", response_model=UserOut, tags=["auth"])
-def me(user=Depends(get_current_user)) -> UserOut:  # noqa: ANN001
+async def me(user=Depends(get_current_user)) -> UserOut:  # noqa: ANN001
     return UserOut(
         id=str(user.id),
         email=user.email,

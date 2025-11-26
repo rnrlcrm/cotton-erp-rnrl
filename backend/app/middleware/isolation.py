@@ -82,6 +82,7 @@ class DataIsolationMiddleware(BaseHTTPMiddleware):
         '/api/v1/settings/auth/login',
         '/api/v1/settings/auth/refresh',
         '/api/v1/settings/auth/logout',
+        '/api/v1/settings/auth/me',  # User info endpoint (has its own auth)
         '/api/v1/partners/onboarding',  # Onboarding endpoints (user doesn't have business_partner_id yet)
     ]
     
