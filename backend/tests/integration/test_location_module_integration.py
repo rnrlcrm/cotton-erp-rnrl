@@ -40,27 +40,54 @@ def mock_google_maps_service():
             )
         ]
         
-        # Mock fetch_place_details
-        service.fetch_place_details.return_value = GooglePlaceDetails(
-            place_id="ChIJwe1EZjDG5zsRaYxkjY_tpF0",
-            formatted_address="Mumbai, Maharashtra, India",
-            name="Mumbai",
-            latitude=19.0760,
-            longitude=72.8777,
-            address_components={
-                "city": "Mumbai",
-                "state": "Maharashtra",
-                "state_code": "MH",
-                "country": "India",
-                "pincode": "400001"
-            },
-            city="Mumbai",
-            district="Mumbai Suburban",
-            state="Maharashtra",
-            state_code="MH",
-            country="India",
-            pincode="400001"
-        )
+        # Mock fetch_place_details with different responses based on place_id
+        def mock_fetch_details(place_id: str) -> GooglePlaceDetails:
+            if place_id == "ChIJYRbY-N3I5zsRdDZmPMZNOTk":
+                # Mumbai Airport
+                return GooglePlaceDetails(
+                    place_id="ChIJYRbY-N3I5zsRdDZmPMZNOTk",
+                    formatted_address="Mumbai Airport, Mumbai, Maharashtra, India",
+                    name="Mumbai Airport",
+                    latitude=19.0896,
+                    longitude=72.8656,
+                    address_components={
+                        "city": "Mumbai",
+                        "state": "Maharashtra",
+                        "state_code": "MH",
+                        "country": "India",
+                        "pincode": "400099"
+                    },
+                    city="Mumbai",
+                    district="Mumbai Suburban",
+                    state="Maharashtra",
+                    state_code="MH",
+                    country="India",
+                    pincode="400099"
+                )
+            else:
+                # Default Mumbai city
+                return GooglePlaceDetails(
+                    place_id="ChIJwe1EZjDG5zsRaYxkjY_tpF0",
+                    formatted_address="Mumbai, Maharashtra, India",
+                    name="Mumbai",
+                    latitude=19.0760,
+                    longitude=72.8777,
+                    address_components={
+                        "city": "Mumbai",
+                        "state": "Maharashtra",
+                        "state_code": "MH",
+                        "country": "India",
+                        "pincode": "400001"
+                    },
+                    city="Mumbai",
+                    district="Mumbai Suburban",
+                    state="Maharashtra",
+                    state_code="MH",
+                    country="India",
+                    pincode="400001"
+                )
+        
+        service.fetch_place_details.side_effect = mock_fetch_details
         
         mock.return_value = service
         yield service
@@ -127,7 +154,7 @@ class TestLocationCRUD:
         assert location.id == created.id
         assert location.name == "Mumbai"
     
-    async def test_get_nonexistent_location_raises_error(self, db_session):
+    async def test_get_nonexistent_location_raises_error(self, db_session, mock_google_maps_service):
         """Test getting nonexistent location raises NotFoundException"""
         event_emitter = EventEmitter(db_session)
         service = LocationService(db_session, event_emitter)
@@ -249,7 +276,7 @@ class TestRegionCalculation:
         event_emitter = EventEmitter(db_session)
         service = LocationService(db_session, event_emitter)
         
-        mock_google_maps_service.fetch_place_details.return_value = GooglePlaceDetails(
+        mock_google_maps_service.fetch_place_details.side_effect = lambda place_id: GooglePlaceDetails(
             place_id="test-mh",
             formatted_address="Test, Maharashtra",
             name="Test MH",
@@ -270,7 +297,7 @@ class TestRegionCalculation:
         event_emitter = EventEmitter(db_session)
         service = LocationService(db_session, event_emitter)
         
-        mock_google_maps_service.fetch_place_details.return_value = GooglePlaceDetails(
+        mock_google_maps_service.fetch_place_details.side_effect = lambda place_id: GooglePlaceDetails(
             place_id="test-tn",
             formatted_address="Test, Tamil Nadu",
             name="Test TN",
@@ -291,7 +318,7 @@ class TestRegionCalculation:
         event_emitter = EventEmitter(db_session)
         service = LocationService(db_session, event_emitter)
         
-        mock_google_maps_service.fetch_place_details.return_value = GooglePlaceDetails(
+        mock_google_maps_service.fetch_place_details.side_effect = lambda place_id: GooglePlaceDetails(
             place_id="test-dl",
             formatted_address="Test, Delhi",
             name="Test DL",
@@ -312,7 +339,7 @@ class TestRegionCalculation:
         event_emitter = EventEmitter(db_session)
         service = LocationService(db_session, event_emitter)
         
-        mock_google_maps_service.fetch_place_details.return_value = GooglePlaceDetails(
+        mock_google_maps_service.fetch_place_details.side_effect = lambda place_id: GooglePlaceDetails(
             place_id="test-unknown",
             formatted_address="Test, Unknown",
             name="Test Unknown",
@@ -339,12 +366,13 @@ class TestLocationEvents:
         service = LocationService(db_session, event_emitter)
         user_id = uuid4()
         
-        data = LocationCreate(name="Mumbai", google_place_id="ChIJwe1EZjDG5zsRaYxkjY_tpF0")
+        # Use Mumbai Airport place_id to avoid collision with other tests
+        data = LocationCreate(name="Mumbai Airport", google_place_id="ChIJYRbY-N3I5zsRdDZmPMZNOTk")
         location = await service.create_or_get_location(data, current_user_id=user_id)
         
         # Verify location was created successfully (event emission happens in background)
         assert location.id is not None
-        assert location.name == "Mumbai"
+        assert location.name == "Mumbai Airport"
     
     async def test_location_updated_event(self, db_session, mock_google_maps_service):
         """Test LocationUpdated event is emitted"""
@@ -355,9 +383,6 @@ class TestLocationEvents:
         # Create location
         data = LocationCreate(name="Mumbai", google_place_id="ChIJwe1EZjDG5zsRaYxkjY_tpF0")
         created = await service.create_or_get_location(data, current_user_id=user_id)
-        
-        # Reset mock to clear creation event
-        event_emitter.reset_mock()
         
         # Update location
         update_data = LocationUpdate(name="Mumbai City")
@@ -376,9 +401,6 @@ class TestLocationEvents:
         data = LocationCreate(name="Mumbai", google_place_id="ChIJwe1EZjDG5zsRaYxkjY_tpF0")
         created = await service.create_or_get_location(data, current_user_id=user_id)
         
-        # Reset mock to clear creation event
-        event_emitter.reset_mock()
-        
         # Delete location
         result = await service.delete_location(created.id, current_user_id=user_id)
         
@@ -392,13 +414,13 @@ class TestLocationEvents:
 class TestLocationValidation:
     """Test location validation and error handling"""
     
-    async def test_create_location_without_google_place_id_fails(self, db_session):
+    async def test_create_location_without_google_place_id_fails(self, db_session, mock_google_maps_service):
         """Test that creating location without google_place_id fails"""
         # This should fail at Pydantic validation level
         with pytest.raises(Exception):  # ValidationError
             LocationCreate(name="Test Location")
     
-    async def test_update_nonexistent_location_raises_error(self, db_session):
+    async def test_update_nonexistent_location_raises_error(self, db_session, mock_google_maps_service):
         """Test updating nonexistent location raises error"""
         event_emitter = EventEmitter(db_session)
         service = LocationService(db_session, event_emitter)
@@ -407,7 +429,7 @@ class TestLocationValidation:
             update_data = LocationUpdate(name="New Name")
             await service.update_location(uuid4(), update_data, current_user_id=uuid4())
     
-    async def test_delete_nonexistent_location_raises_error(self, db_session):
+    async def test_delete_nonexistent_location_raises_error(self, db_session, mock_google_maps_service):
         """Test deleting nonexistent location raises error"""
         event_emitter = EventEmitter(db_session)
         service = LocationService(db_session, event_emitter)
