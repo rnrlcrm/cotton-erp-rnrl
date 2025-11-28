@@ -21,7 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
 from backend.modules.partners.models import BusinessPartner
-from backend.modules.partners.repositories import PartnerRepository
+from backend.modules.partners.repositories import BusinessPartnerRepository
 
 
 class CapabilityDetectionService:
@@ -38,7 +38,7 @@ class CapabilityDetectionService:
     
     def __init__(self, db: AsyncSession):
         self.db = db
-        self.repo = PartnerRepository(db)
+        self.repo = BusinessPartnerRepository(db)
     
     async def detect_indian_domestic_capability(self, partner_id: UUID) -> dict:
         """

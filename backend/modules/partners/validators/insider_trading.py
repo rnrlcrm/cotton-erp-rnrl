@@ -23,7 +23,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, or_, and_
 
 from backend.modules.partners.models import BusinessPartner
-from backend.modules.partners.repositories import PartnerRepository
+from backend.modules.partners.repositories import BusinessPartnerRepository
 
 
 class InsiderTradingError(Exception):
@@ -50,7 +50,7 @@ class InsiderTradingValidator:
     
     def __init__(self, db: AsyncSession):
         self.db = db
-        self.repo = PartnerRepository(db)
+        self.repo = BusinessPartnerRepository(db)
     
     async def validate_trade_parties(
         self,

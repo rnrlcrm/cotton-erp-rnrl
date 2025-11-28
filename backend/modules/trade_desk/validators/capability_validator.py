@@ -32,7 +32,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
 from backend.modules.partners.models import BusinessPartner
-from backend.modules.partners.repositories import PartnerRepository
+from backend.modules.partners.repositories import BusinessPartnerRepository
 
 
 class CapabilityValidationError(Exception):
@@ -57,7 +57,7 @@ class TradeCapabilityValidator:
     
     def __init__(self, db: AsyncSession):
         self.db = db
-        self.repo = PartnerRepository(db)
+        self.repo = BusinessPartnerRepository(db)
     
     async def validate_sell_capability(
         self,
