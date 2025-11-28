@@ -339,6 +339,18 @@ class TestPartnerCRUD:
             kyc_status=KYCStatus.VERIFIED,
             tax_id_number="27AABCG1234H1Z3",
             pan_number="AABCG1234H",
+            bank_account_name="Direct Create Partner",
+            bank_name="HDFC Bank",
+            bank_account_number="123456789",
+            bank_routing_code="HDFC0001234",
+            primary_address="123 Test St",
+            primary_city="Mumbai",
+            primary_postal_code="400001",
+            primary_country="India",
+            primary_contact_name="Test Contact",
+            primary_contact_email="test@example.com",
+            primary_contact_phone="+919876543210",
+            primary_currency="INR",
         )
         
         db_session.add(partner)
