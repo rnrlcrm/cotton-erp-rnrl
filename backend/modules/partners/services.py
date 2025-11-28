@@ -956,7 +956,8 @@ class PartnerService:
             else 0
         )
         
-        gst_data = application.gst_verification_data or {}
+        # Safely get GST verification data (may not exist in test fixtures)
+        gst_data = getattr(application, 'gst_verification_data', None) or {}
         
         risk_assessment = await self.risk_service.calculate_risk_score(
             partner_type=application.partner_type,

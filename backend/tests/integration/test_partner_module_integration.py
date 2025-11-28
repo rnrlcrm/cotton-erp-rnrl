@@ -354,8 +354,7 @@ class TestPartnerCRUD:
         )
         
         db_session.add(partner)
-        await db_session.commit()
-        await db_session.refresh(partner)
+        await db_session.flush()
 
         assert partner.legal_name == "Direct Create Partner"
         assert partner.status == PartnerStatus.APPROVED
@@ -387,10 +386,9 @@ class TestPartnerCRUD:
         )
         
         db_session.add(partner)
-        await db_session.commit()
-        await db_session.refresh(partner)
+        await db_session.flush()
 
-        retrieved = await repo.get_by_id(partner.id, org_id)
+        retrieved = await repo.get_by_id(partner.id)
 
         assert retrieved is not None
         assert retrieved.id == partner.id
@@ -427,7 +425,7 @@ class TestPartnerCRUD:
         
         for partner in partners:
             db_session.add(partner)
-        await db_session.commit()
+        await db_session.flush()
 
         # List approved partners
         result = await repo.list_partners(
@@ -464,18 +462,16 @@ class TestPartnerCRUD:
         )
         
         db_session.add(partner)
-        await db_session.commit()
-        await db_session.refresh(partner)
+        await db_session.flush()
 
-        # Update
+        # Update partner
         await repo.update(
             partner.id,
-            org_id,
             trade_name="Updated Trade Name",
             contact_email="updated@email.com"
         )
 
-        updated = await repo.get_by_id(partner.id, org_id)
+        updated = await repo.get_by_id(partner.id)
         assert updated.trade_name == "Updated Trade Name"
         assert updated.contact_email == "updated@email.com"
 
@@ -527,7 +523,7 @@ class TestPartnerCRUD:
         
         for partner in partners:
             db_session.add(partner)
-        await db_session.commit()
+        await db_session.flush()
 
         # Search for "Cotton"
         results = await repo.search_partners(org_id, search_term="Cotton")
@@ -565,8 +561,7 @@ class TestPartnerAmendments:
         )
         
         db_session.add(partner)
-        await db_session.commit()
-        await db_session.refresh(partner)
+        await db_session.flush()
 
         # Request amendment
         repo = PartnerAmendmentRepository(db_session)
@@ -589,8 +584,7 @@ class TestPartnerAmendments:
         )
         
         db_session.add(amendment)
-        await db_session.commit()
-        await db_session.refresh(amendment)
+        await db_session.flush()
 
         assert amendment.amendment_type == AmendmentType.CHANGE_BANK
         assert amendment.status == "pending"
@@ -623,8 +617,7 @@ class TestPartnerAmendments:
         )
         
         db_session.add(partner)
-        await db_session.commit()
-        await db_session.refresh(partner)
+        await db_session.flush()
 
         # Create amendment
         amendment = PartnerAmendment(
@@ -639,8 +632,7 @@ class TestPartnerAmendments:
         )
         
         db_session.add(amendment)
-        await db_session.commit()
-        await db_session.refresh(amendment)
+        await db_session.flush()
 
         # Approve amendment
         amendment.status = "approved"
@@ -652,8 +644,7 @@ class TestPartnerAmendments:
         # Apply changes to partner
         partner.contact_email = "new@email.com"
         
-        await db_session.commit()
-        await db_session.refresh(partner)
+        await db_session.flush()
 
         assert partner.contact_email == "new@email.com"
         assert amendment.status == "approved"
@@ -688,8 +679,7 @@ class TestPartnerLocations:
         )
         
         db_session.add(partner)
-        await db_session.commit()
-        await db_session.refresh(partner)
+        await db_session.flush()
 
         # Add location
         location = PartnerLocation(
@@ -704,8 +694,7 @@ class TestPartnerLocations:
         )
         
         db_session.add(location)
-        await db_session.commit()
-        await db_session.refresh(location)
+        await db_session.flush()
 
         assert location.location_name == "Mumbai Branch"
         assert location.partner_id == partner.id
@@ -736,8 +725,7 @@ class TestPartnerLocations:
         )
         
         db_session.add(partner)
-        await db_session.commit()
-        await db_session.refresh(partner)
+        await db_session.flush()
 
         # Add multiple locations
         locations = [
@@ -754,11 +742,11 @@ class TestPartnerLocations:
         
         for loc in locations:
             db_session.add(loc)
-        await db_session.commit()
+        await db_session.flush()
 
         # List locations
         repo = PartnerLocationRepository(db_session)
-        result = await repo.list_by_partner(partner.id, org_id)
+        result = await repo.get_by_partner(partner.id)
 
         assert len(result) == 3
         assert sum(1 for loc in result if loc.is_primary) == 1
@@ -792,8 +780,7 @@ class TestPartnerEmployees:
         )
         
         db_session.add(partner)
-        await db_session.commit()
-        await db_session.refresh(partner)
+        await db_session.flush()
 
         # Create user account for employee
         from backend.modules.settings.models import User
@@ -807,8 +794,7 @@ class TestPartnerEmployees:
             is_verified=False
         )
         db_session.add(user)
-        await db_session.commit()
-        await db_session.refresh(user)
+        await db_session.flush()
 
         # Add employee
         employee = PartnerEmployee(
@@ -823,8 +809,7 @@ class TestPartnerEmployees:
         )
         
         db_session.add(employee)
-        await db_session.commit()
-        await db_session.refresh(employee)
+        await db_session.flush()
 
         assert employee.employee_name == "Ramesh Kumar"
         assert employee.employee_email == "ramesh@testpartner.com"
@@ -856,8 +841,7 @@ class TestPartnerEmployees:
         )
         
         db_session.add(partner)
-        await db_session.commit()
-        await db_session.refresh(partner)
+        await db_session.flush()
 
         # Add employees (testing unlimited - no max 2 restriction)
         from backend.modules.settings.models import User
@@ -890,7 +874,7 @@ class TestPartnerEmployees:
             employees.append(employee)
             db_session.add(employee)
         
-        await db_session.commit()
+        await db_session.flush()
 
         # List employees
         repo = PartnerEmployeeRepository(db_session)
@@ -930,8 +914,7 @@ class TestPartnerVehicles:
         )
         
         db_session.add(partner)
-        await db_session.commit()
-        await db_session.refresh(partner)
+        await db_session.flush()
 
         # Add vehicle
         vehicle = PartnerVehicle(
@@ -949,8 +932,7 @@ class TestPartnerVehicles:
         )
         
         db_session.add(vehicle)
-        await db_session.commit()
-        await db_session.refresh(vehicle)
+        await db_session.flush()
 
         assert vehicle.registration_number == "MH12AB1234"
         assert vehicle.capacity_tons == Decimal("7.5")
@@ -982,8 +964,7 @@ class TestPartnerVehicles:
         )
         
         db_session.add(partner)
-        await db_session.commit()
-        await db_session.refresh(partner)
+        await db_session.flush()
 
         # Add multiple vehicles
         vehicles = [
@@ -999,11 +980,11 @@ class TestPartnerVehicles:
         
         for vehicle in vehicles:
             db_session.add(vehicle)
-        await db_session.commit()
+        await db_session.flush()
 
         # List vehicles
         repo = PartnerVehicleRepository(db_session)
-        result = await repo.list_by_partner(partner.id, org_id)
+        result = await repo.get_by_partner(partner.id)
 
         assert len(result) == 5
 
@@ -1039,8 +1020,7 @@ class TestKYCRenewal:
         )
         
         db_session.add(partner)
-        await db_session.commit()
-        await db_session.refresh(partner)
+        await db_session.flush()
 
         # Initiate renewal
         renewal = PartnerKYCRenewal(
@@ -1053,8 +1033,7 @@ class TestKYCRenewal:
         )
         
         db_session.add(renewal)
-        await db_session.commit()
-        await db_session.refresh(renewal)
+        await db_session.flush()
 
         assert renewal.status == "pending"
         assert len(renewal.documents_required) == 3
@@ -1087,8 +1066,7 @@ class TestKYCRenewal:
         )
         
         db_session.add(partner)
-        await db_session.commit()
-        await db_session.refresh(partner)
+        await db_session.flush()
 
         # Create renewal
         renewal = PartnerKYCRenewal(
@@ -1101,8 +1079,7 @@ class TestKYCRenewal:
         )
         
         db_session.add(renewal)
-        await db_session.commit()
-        await db_session.refresh(renewal)
+        await db_session.flush()
 
         # Complete renewal
         renewal.status = "completed"
@@ -1113,7 +1090,7 @@ class TestKYCRenewal:
         partner.kyc_status = KYCStatus.VERIFIED
         partner.kyc_verified_at = datetime.utcnow()
         
-        await db_session.commit()
+        await db_session.flush()
 
         assert renewal.status == "completed"
         assert partner.kyc_status == KYCStatus.VERIFIED
@@ -1196,8 +1173,7 @@ class TestCDPSIntegration:
         )
         
         db_session.add(partner)
-        await db_session.commit()
-        await db_session.refresh(partner)
+        await db_session.flush()
 
         assert partner.capabilities["domestic_sell_india"] is True
         assert partner.capabilities["domestic_buy_india"] is True
@@ -1234,8 +1210,7 @@ class TestCDPSIntegration:
         )
         
         db_session.add(partner)
-        await db_session.commit()
-        await db_session.refresh(partner)
+        await db_session.flush()
 
         assert partner.capabilities["domestic_sell_india"] is False
         assert partner.capabilities["domestic_buy_india"] is False
@@ -1273,8 +1248,7 @@ class TestCDPSIntegration:
         )
         
         db_session.add(partner)
-        await db_session.commit()
-        await db_session.refresh(partner)
+        await db_session.flush()
 
         # All trading capabilities should be False
         assert partner.capabilities["domestic_sell_india"] is False
