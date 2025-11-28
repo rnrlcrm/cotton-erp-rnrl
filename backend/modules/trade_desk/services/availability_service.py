@@ -129,7 +129,23 @@ class AvailabilityService:
         await self._validate_seller_location(seller_id, location_id)
         
         # ====================================================================
-        # 1A: 🚀 ROLE RESTRICTION VALIDATION (Option A)
+        # 1A: 🚀 CAPABILITY VALIDATION (CDPS - Capability-Driven Partner System)
+        # Validate partner has permission to sell based on verified documents
+        # ====================================================================
+        from backend.modules.trade_desk.validators.capability_validator import TradeCapabilityValidator
+        
+        # Get location country for capability check
+        location_country = await self._get_location_country(location_id)
+        
+        capability_validator = TradeCapabilityValidator(self.db)
+        await capability_validator.validate_sell_capability(
+            partner_id=seller_id,
+            location_country=location_country,
+            raise_exception=True  # Will raise CapabilityValidationError if invalid
+        )
+        
+        # ====================================================================
+        # 1B: 🚀 ROLE RESTRICTION VALIDATION (Option A)
         # Prevent BUYER from posting SELL availabilities
         # Allow SELLER and TRADER to post SELL availabilities
         # ====================================================================
@@ -829,6 +845,26 @@ class AvailabilityService:
         
         # Placeholder: Return empty
         return {}
+    
+    async def _get_location_country(
+        self,
+        location_id: UUID
+    ) -> str:
+        """
+        Get country from location for capability validation.
+        
+        Args:
+            location_id: Location UUID
+        
+        Returns:
+            str: Country name (e.g., "India", "USA", "China")
+        
+        TODO: Query actual location table when available
+        """
+        # TODO: Load from settings_locations table
+        # For now, default to India (most common case)
+        # This will be properly implemented when location module is integrated
+        return "India"
     
     # ========================
     # Search & Query Operations

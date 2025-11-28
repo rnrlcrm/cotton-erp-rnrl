@@ -203,7 +203,23 @@ class RequirementService:
         await self._validate_buyer_locations(buyer_id, delivery_locations)
         
         # ====================================================================
-        # STEP 1A: 🚀 ROLE RESTRICTION VALIDATION (Option A)
+        # STEP 1A: 🚀 CAPABILITY VALIDATION (CDPS - Capability-Driven Partner System)
+        # Validate partner has permission to buy based on verified documents
+        # ====================================================================
+        from backend.modules.trade_desk.validators.capability_validator import TradeCapabilityValidator
+        
+        # Get delivery country for capability check
+        delivery_country = await self._get_delivery_country(delivery_locations)
+        
+        capability_validator = TradeCapabilityValidator(self.db)
+        await capability_validator.validate_buy_capability(
+            partner_id=buyer_id,
+            delivery_country=delivery_country,
+            raise_exception=True  # Will raise CapabilityValidationError if invalid
+        )
+        
+        # ====================================================================
+        # STEP 1B: 🚀 ROLE RESTRICTION VALIDATION (Option A)
         # Prevent SELLER from posting BUY requirements
         # Allow BUYER and TRADER to post BUY requirements
         # ====================================================================
@@ -1435,6 +1451,26 @@ class RequirementService:
         
         # Placeholder: Allow all
         pass
+    
+    async def _get_delivery_country(
+        self,
+        delivery_locations: Optional[List[Dict[str, Any]]]
+    ) -> str:
+        """
+        Get delivery country from delivery locations for capability validation.
+        
+        Args:
+            delivery_locations: Delivery locations list
+        
+        Returns:
+            str: Country name (e.g., "India", "USA", "China")
+        
+        TODO: Query actual location table when available
+        """
+        # TODO: Load from settings_locations table
+        # For now, default to India (most common case)
+        # This will be properly implemented when location module is integrated
+        return "India"
     
     # ========================================================================
     # 🚀 RISK MANAGEMENT HELPERS

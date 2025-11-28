@@ -185,6 +185,58 @@ class MatchValidator:
             )
         
         # ====================================================================
+        # STEP 1.6: 🚀 CAPABILITY VALIDATION (CDPS)
+        # Validate both parties have required trading capabilities
+        # ====================================================================
+        from backend.modules.trade_desk.validators.capability_validator import TradeCapabilityValidator
+        
+        capability_validator = TradeCapabilityValidator(self.db)
+        
+        # Get countries (TODO: fetch from actual location data)
+        buyer_delivery_country = "India"  # TODO: Get from requirement delivery location
+        seller_location_country = "India"  # TODO: Get from availability location
+        
+        parties_valid, capability_error = await capability_validator.validate_trade_parties(
+            buyer_id=requirement.buyer_id,
+            seller_id=availability.seller_id,
+            buyer_delivery_country=buyer_delivery_country,
+            seller_location_country=seller_location_country,
+            raise_exception=False
+        )
+        
+        if not parties_valid:
+            reasons.append(f"Capability violation: {capability_error}")
+            return ValidationResult(
+                is_valid=False,
+                reasons=reasons,
+                warnings=warnings,
+                ai_alerts=ai_alerts
+            )
+        
+        # ====================================================================
+        # STEP 1.7: 🚀 INSIDER TRADING PREVENTION (CDPS)
+        # Block trading between related entities
+        # ====================================================================
+        from backend.modules.partners.validators.insider_trading import InsiderTradingValidator
+        
+        insider_validator = InsiderTradingValidator(self.db)
+        
+        insider_valid, insider_error = await insider_validator.validate_trade_parties(
+            buyer_id=requirement.buyer_id,
+            seller_id=availability.seller_id,
+            raise_exception=False
+        )
+        
+        if not insider_valid:
+            reasons.append(f"Insider trading blocked: {insider_error}")
+            return ValidationResult(
+                is_valid=False,
+                reasons=reasons,
+                warnings=warnings,
+                ai_alerts=ai_alerts
+            )
+        
+        # ====================================================================
         # STEP 2: AI Price Alert Validation (ENHANCEMENT #7)
         # ====================================================================
         
