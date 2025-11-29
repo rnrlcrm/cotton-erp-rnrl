@@ -20,7 +20,7 @@ import hashlib
 import redis.asyncio as aioredis
 from datetime import timedelta
 
-from backend.core.config import settings
+from backend.core.settings.config import settings
 
 
 class IdempotencyMiddleware(BaseHTTPMiddleware):
