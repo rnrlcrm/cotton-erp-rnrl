@@ -447,12 +447,13 @@ class PartnerLocation(Base):
     partner = relationship("BusinessPartner", back_populates="locations")
 
 
-class PartnerEmployee(Base):
+class PartnerEmployee(Base, EventMixin):
     """
-    Employees under a partner (max 2 additional users)
+    Employees under a partner (UNLIMITED - for staff, branches, departments)
     
-    Partner owner becomes 'admin' with full access
-    Employees get limited permissions
+    Login via corporate email (OTP/Magic Link, no password)
+    Primary partner assigns role-based or module-based permissions
+    Full audit trail via event system
     """
     
     __tablename__ = "partner_employees"

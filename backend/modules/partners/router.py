@@ -639,7 +639,7 @@ async def request_amendment(
     "/{partner_id}/employees",
     response_model=PartnerEmployeeResponse,
     summary="Invite Employee",
-    description="Add employee to partner account (max 2 additional employees)"
+    description="Add employee to partner account (unlimited - role/module based access)"
 )
 async def invite_employee(
     partner_id: UUID,
@@ -651,12 +651,13 @@ async def invite_employee(
     """Invite employee to partner account"""
     employee_repo = PartnerEmployeeRepository(db)
     
-    # Check employee limit
-    active_count = await employee_repo.count_active_employees(partner_id)
-    if active_count >= 2:
+    # Get partner for event context
+    partner_repo = BusinessPartnerRepository(db)
+    partner = await partner_repo.get_by_id(partner_id)
+    if not partner:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Maximum 2 employees allowed per partner"
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Partner not found"
         )
     
     # Create employee invitation
@@ -664,17 +665,34 @@ async def invite_employee(
         partner_id=partner_id,
         organization_id=organization_id,
         user_id=user_id,  # Will be updated when they accept
-        employee_name=employee.name,
-        employee_email=employee.email,
-        employee_phone=employee.phone,
+        employee_name=employee.employee_name,
+        employee_email=employee.employee_email,
+        employee_phone=employee.employee_phone,
         designation=employee.designation,
         role="employee",
-        status="invited"
+        status="invited",
+        permissions=employee.permissions
     )
+    
+    # Emit audit event
+    new_employee.emit_event(
+        event_type="partner.employee.invited",
+        user_id=user_id,
+        data={
+            "employee_id": str(new_employee.id),
+            "partner_id": str(partner_id),
+            "partner_name": partner.legal_name,
+            "employee_name": employee.employee_name,
+            "employee_email": employee.employee_email,
+            "designation": employee.designation,
+            "permissions": employee.permissions
+        }
+    )
+    await new_employee.flush_events(db)
     
     await db.commit()
     
-    # TODO: Send invitation email
+    # TODO: Send invitation email with OTP/magic link
     
     return new_employee
 
