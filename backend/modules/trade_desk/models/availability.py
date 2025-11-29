@@ -102,7 +102,7 @@ class Availability(Base, EventMixin):
         index=True,
         comment='Registered location ID (NULL for ad-hoc Google Maps locations)'
     )
-    seller_id = Column(
+    seller_partner_id = Column(
         PostgreSQLUUID(as_uuid=True),
         ForeignKey("business_partners.id", ondelete="RESTRICT"),
         nullable=False,
@@ -258,7 +258,7 @@ class Availability(Base, EventMixin):
     # Relationships
     commodity = relationship("Commodity", foreign_keys=[commodity_id])
     location = relationship("Location", foreign_keys=[location_id])
-    seller = relationship("BusinessPartner", foreign_keys=[seller_id])
+    seller = relationship("BusinessPartner", foreign_keys=[seller_partner_id])
     seller_branch = relationship("PartnerLocation", foreign_keys=[seller_branch_id])
     
     # Constraints
@@ -288,7 +288,7 @@ class Availability(Base, EventMixin):
         
         event = AvailabilityCreatedEvent(
             availability_id=self.id,
-            seller_id=self.seller_id,
+            seller_id=self.seller_partner_id,
             commodity_id=self.commodity_id,
             location_id=self.location_id,
             quantity=self.total_quantity,

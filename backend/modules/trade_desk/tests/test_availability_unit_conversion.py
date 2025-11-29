@@ -21,7 +21,7 @@ from decimal import Decimal
 from uuid import uuid4
 
 from backend.modules.trade_desk.services.availability_service import AvailabilityService
-from backend.modules.commodity_master.services.unit_converter import UnitConverter
+from backend.modules.settings.commodities.unit_converter import UnitConverter
 
 
 @pytest.mark.asyncio
@@ -367,7 +367,7 @@ class TestAvailabilityUnitConversion:
 @pytest.fixture
 async def sample_commodity_with_parameters(db_session):
     """Create commodity with parameter constraints"""
-    from backend.modules.commodity_master.models import Commodity, CommodityParameter
+    from backend.modules.settings.commodities.models import Commodity, CommodityParameter
     
     commodity = Commodity(
         id=uuid4(),
@@ -395,7 +395,7 @@ async def sample_commodity_with_parameters(db_session):
 @pytest.fixture
 async def sample_commodity_with_mandatory_params(db_session):
     """Create commodity with mandatory parameters"""
-    from backend.modules.commodity_master.models import Commodity, CommodityParameter
+    from backend.modules.settings.commodities.models import Commodity, CommodityParameter
     
     commodity = Commodity(
         id=uuid4(),

@@ -377,7 +377,7 @@ class AvailabilityService:
         
         # 8. Create availability model
         availability = Availability(
-            seller_id=seller_id,
+            seller_partner_id=seller_id,
             commodity_id=commodity_id,
             location_id=actual_location_id,  # NULL for ad-hoc locations
             total_quantity=total_quantity,
@@ -632,7 +632,7 @@ class AvailabilityService:
         try:
             is_valid, error_msg = await insider_validator.validate_trade_parties(
                 buyer_id=buyer_id,
-                seller_id=availability.seller_id,
+                seller_id=availability.seller_partner_id,
                 raise_exception=True  # Will raise InsiderTradingError
             )
         except Exception as e:
@@ -642,7 +642,7 @@ class AvailabilityService:
                 event_data={
                     "availability_id": str(availability_id),
                     "buyer_id": str(buyer_id),
-                    "seller_id": str(availability.seller_id),
+                    "seller_id": str(availability.seller_partner_id),
                     "reason": str(e),
                     "rejected_by": "insider_trading_validator",
                     "timestamp": datetime.now(timezone.utc).isoformat()

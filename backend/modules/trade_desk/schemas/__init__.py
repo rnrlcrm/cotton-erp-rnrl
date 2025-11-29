@@ -352,7 +352,7 @@ class AvailabilityResponse(BaseModel):
     """Availability response with all details."""
     
     id: UUID
-    seller_id: UUID
+    seller_partner_id: UUID
     commodity_id: UUID
     location_id: UUID
     
@@ -436,7 +436,7 @@ class AvailabilityResponse(BaseModel):
         json_schema_extra = {
             "example": {
                 "id": "123e4567-e89b-12d3-a456-426614174003",
-                "seller_id": "123e4567-e89b-12d3-a456-426614174004",
+                "seller_partner_id": "123e4567-e89b-12d3-a456-426614174004",
                 "commodity_id": "123e4567-e89b-12d3-a456-426614174000",
                 "location_id": "123e4567-e89b-12d3-a456-426614174001",
                 "total_quantity": 100.0,
