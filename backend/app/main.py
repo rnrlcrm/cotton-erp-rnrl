@@ -83,6 +83,19 @@ def create_app() -> FastAPI:
 		with log_cfg_path.open() as f:
 			cfg = json.load(f)
 		dictConfig(cfg)
+	
+	# Enable PII sanitization for production (15-year GDPR compliance)
+	if os.getenv("ENABLE_PII_FILTER", "true").lower() == "true":
+		try:
+			from backend.core.logging.pii_filter import PIIFilter
+			
+			root_logger = logging.getLogger()
+			root_logger.addFilter(PIIFilter())
+			print("✓ PII sanitization enabled for all logs")
+		except ImportError:
+			print("⚠ PII filter not available")
+		except Exception as e:
+			print(f"⚠ Failed to enable PII filter: {e}")
 	# OpenTelemetry instrumentation (GCP-native for 15-year architecture)
 	otlp_endpoint = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT")
 	gcp_project_id = os.getenv("GCP_PROJECT_ID")
