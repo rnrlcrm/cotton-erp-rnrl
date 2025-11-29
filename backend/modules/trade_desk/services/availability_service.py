@@ -148,7 +148,8 @@ class AvailabilityService:
         
         # ====================================================================
         # 1A: 🚀 CAPABILITY VALIDATION (CDPS - Capability-Driven Partner System)
-        # Validate partner has permission to sell based on verified documents
+        # Validate partner has SELL capability based on verified documents
+        # Uses partner.capabilities JSONB (NOT deprecated partner_type)
         # ====================================================================
         from backend.modules.trade_desk.validators.capability_validator import TradeCapabilityValidator
         
@@ -161,27 +162,20 @@ class AvailabilityService:
             location_country=location_country,
             raise_exception=True  # Will raise CapabilityValidationError if invalid
         )
+        # Capability validation checks:
+        # ✅ Service providers blocked (entity_class="service_provider")
+        # ✅ Indian entities need domestic_sell_india=True (from GST+PAN)
+        # ✅ Foreign entities need domestic_sell_home_country=True (from tax docs)
+        # ✅ Foreign entities CANNOT sell in India (must establish Indian entity)
+        # ✅ Export requires export_allowed=True (from IEC+GST+PAN or foreign license)
         
         # ====================================================================
-        # 1B: 🚀 ROLE RESTRICTION VALIDATION (Option A)
-        # Prevent BUYER from posting SELL availabilities
-        # Allow SELLER and TRADER to post SELL availabilities
+        # 1B: 🚀 CIRCULAR TRADING PREVENTION
+        # Block if seller has open BUY for same commodity today
         # ====================================================================
         from backend.modules.risk.risk_engine import RiskEngine
         risk_engine = RiskEngine(self.db)
         
-        role_validation = await risk_engine.validate_partner_role(
-            partner_id=seller_id,
-            transaction_type="SELL"
-        )
-        
-        if not role_validation["allowed"]:
-            raise ValueError(role_validation["reason"])
-        
-        # ====================================================================
-        # 1B: 🚀 CIRCULAR TRADING PREVENTION (Option A: Same-day only)
-        # Block if seller has open BUY for same commodity today
-        # ====================================================================
         if expiry_date:
             trade_date = expiry_date.date()
         else:
