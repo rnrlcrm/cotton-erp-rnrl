@@ -21,14 +21,14 @@ import random
 
 class SendOTPRequest(BaseModel):
     """Request to send OTP"""
-    mobile_number: str = Field(..., min_length=10, max_length=15, regex=r"^\+?[1-9]\d{9,14}$")
-    country_code: str = Field(default="+91", regex=r"^\+\d{1,3}$")
+    mobile_number: str = Field(..., min_length=10, max_length=15, pattern=r"^\+?[1-9]\d{9,14}$")
+    country_code: str = Field(default="+91", pattern=r"^\+\d{1,3}$")
 
 
 class VerifyOTPRequest(BaseModel):
     """Request to verify OTP"""
     mobile_number: str = Field(..., min_length=10, max_length=15)
-    otp: str = Field(..., min_length=6, max_length=6, regex=r"^\d{6}$")
+    otp: str = Field(..., min_length=6, max_length=6, pattern=r"^\d{6}$")
 
 
 class CompleteProfileRequest(BaseModel):
