@@ -42,7 +42,16 @@ class Commodity(Base, EventMixin):
     hsn_code = Column(String(20), nullable=True, index=True)
     gst_rate = Column(Numeric(5, 2), nullable=True)
     description = Column(Text, nullable=True)
-    uom = Column(String(50), nullable=True)  # Unit: MT, Quintals, Bales
+    
+    # LEGACY: Keep for backward compatibility, will be migrated to base_unit
+    uom = Column(String(50), nullable=True)
+    
+    # UNIT CONVERSION FIELDS (NEW)
+    base_unit = Column(String(50), nullable=False, default="KG", server_default="KG")  # KG, METER, LITER, PIECE
+    trade_unit = Column(String(50), nullable=True)  # BALE, BAG, MT, QTL, CANDY, etc.
+    rate_unit = Column(String(50), nullable=True)   # CANDY, QTL, KG, MT, etc.
+    standard_weight_per_unit = Column(Numeric(10, 2), nullable=True)  # For BALE/BAG custom weight
+    
     is_active = Column(Boolean, default=True, nullable=False)
     
     # Audit fields

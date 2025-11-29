@@ -39,6 +39,8 @@ from backend.modules.settings.commodities.schemas import (
     CommissionStructureCreate,
     CommissionStructureResponse,
     CommissionStructureUpdate,
+    ConversionCalculationRequest,
+    ConversionCalculationResponse,
     DeliveryTermCreate,
     DeliveryTermResponse,
     DeliveryTermUpdate,
@@ -56,6 +58,8 @@ from backend.modules.settings.commodities.schemas import (
     TradeTypeCreate,
     TradeTypeResponse,
     TradeTypeUpdate,
+    UnitInfo,
+    UnitsListResponse,
     WeightmentTermCreate,
     WeightmentTermResponse,
     WeightmentTermUpdate,
@@ -797,6 +801,132 @@ def advanced_search_commodities(
     service = CommodityService(db, event_emitter=EventEmitter(db), user_id=user_id)
     commodities = service.search_commodities(filter_criteria)
     return commodities
+
+
+# ==================== UNIT CONVERSION ENDPOINTS ====================
+
+@router.post("/{commodity_id}/calculate-conversion", response_model=ConversionCalculationResponse)
+async def calculate_conversion(
+    commodity_id: UUID,
+    request: ConversionCalculationRequest,
+    db: AsyncSession = Depends(get_db),
+    user_id: UUID = Depends(get_current_user_id)
+):
+    """
+    Calculate theoretical billing amount with complete conversion breakdown.
+    
+    This endpoint is used by Trade Desk to calculate billing amounts when:
+    - Trade quantity unit differs from rate unit
+    - Example: 600 BALES @ ₹50,000/CANDY = ₹14,341,200
+    
+    **Returns:**
+    - Quantity in base unit (KG/METER/LITER/PIECE)
+    - Rate per base unit
+    - Theoretical billing amount
+    - Conversion factors used
+    - Human-readable calculation formula
+    
+    **Note:** This is THEORETICAL calculation only. Actual payment processing
+    happens in the Accounts module.
+    """
+    from backend.modules.settings.commodities.unit_converter import UnitConverter
+    
+    service = CommodityService(db, event_emitter=EventEmitter(db), user_id=user_id)
+    commodity = await service.get(commodity_id)
+    
+    if not commodity:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Commodity with ID {commodity_id} not found"
+        )
+    
+    # Validate that commodity has required unit fields
+    if not commodity.trade_unit or not commodity.rate_unit:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Commodity '{commodity.name}' does not have trade_unit and rate_unit configured"
+        )
+    
+    # Perform conversion calculation
+    try:
+        converter = UnitConverter()
+        result = converter.calculate_billing_amount(
+            trade_quantity=request.trade_quantity,
+            trade_unit=commodity.trade_unit,
+            rate_per_unit=request.rate_per_unit,
+            rate_unit=commodity.rate_unit,
+            base_unit=commodity.base_unit
+        )
+        
+        # Build response
+        return ConversionCalculationResponse(
+            commodity_id=commodity.id,
+            commodity_name=commodity.name,
+            trade_quantity=request.trade_quantity,
+            trade_unit=commodity.trade_unit,
+            rate_per_unit=request.rate_per_unit,
+            rate_unit=commodity.rate_unit,
+            quantity_in_base_unit=result["quantity_in_base_unit"],
+            base_unit=result["base_unit"],
+            rate_per_base_unit=result["rate_per_base_unit"],
+            theoretical_billing_amount=result["billing_amount"],
+            conversion_factors=result["conversion_factors"],
+            calculation_formula=result["formula"]
+        )
+        
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+
+
+@router.get("/units/list", response_model=UnitsListResponse)
+def list_available_units():
+    """
+    List all available units grouped by category.
+    
+    Returns all 50+ pre-defined units from the unit catalog with their
+    conversion factors and metadata.
+    
+    **Categories:**
+    - weight: KG, GRAM, QUINTAL, MT, CANDY, MAUND, POUND, etc.
+    - count: BALE, BAG, SACK, BOX, CARTON, DRUM, etc.
+    - length: METER, CM, KM, YARD, FOOT, INCH
+    - volume: LITER, ML, GALLON, BARREL
+    - count_simple: PIECE, DOZEN, GROSS, BUNDLE
+    - area: SQ_METER, SQ_FOOT, SQ_YARD
+    
+    **Use Case:** Populate dropdown menus for trade_unit and rate_unit selection.
+    """
+    from backend.modules.settings.commodities.unit_catalog import (
+        get_all_categories,
+        get_units_by_category,
+        list_all_units
+    )
+    
+    categories = get_all_categories()
+    units_by_category = {}
+    
+    for category in categories:
+        category_units = get_units_by_category(category)
+        units_by_category[category] = [
+            {
+                "code": unit["code"],
+                "name": unit["name"],
+                "conversion_factor": str(unit["conversion_factor"]),
+                "description": unit.get("description")
+            }
+            for unit in category_units
+        ]
+    
+    all_units = list_all_units()
+    
+    return UnitsListResponse(
+        categories=categories,
+        units_by_category=units_by_category,
+        total_units=len(all_units)
+    )
 
 
 @router.post("/bulk/validate")
