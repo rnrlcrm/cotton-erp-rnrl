@@ -15,8 +15,9 @@ Features:
 - Real-time WebSocket updates
 
 Seller Location Validation:
-- SELLER: Can only sell from registered locations (location_id must be in business_partner.locations)
-- TRADER: Can sell from any location (no restriction)
+- ALL SELLERS: Can sell from ANY location (no restriction)
+- Reason: Traders may source from multiple locations, sellers may have temporary stock
+- Validation: Only check if location exists in settings_locations table
 """
 
 from __future__ import annotations
@@ -109,6 +110,16 @@ class Availability(Base, EventMixin):
     
     # Quantity Management (auto-updated by trigger)
     total_quantity = Column(Numeric(15, 3), nullable=False)
+    quantity_unit = Column(
+        String(20),
+        nullable=False,
+        comment='Unit of quantity: BALE, BAG, KG, MT, CANDY, QTL, etc.'
+    )
+    quantity_in_base_unit = Column(
+        Numeric(18, 6),
+        nullable=True,
+        comment='Auto-calculated quantity in commodity base_unit (KG/METER/LITER)'
+    )
     available_quantity = Column(Numeric(15, 3), nullable=False)
     reserved_quantity = Column(Numeric(15, 3), default=0, nullable=False)
     sold_quantity = Column(Numeric(15, 3), default=0, nullable=False)
@@ -118,9 +129,44 @@ class Availability(Base, EventMixin):
     # Pricing (supports multiple price structures)
     price_type = Column(String(20), default=PriceType.FIXED.value, nullable=False)
     base_price = Column(Numeric(15, 2), nullable=True)  # For FIXED/NEGOTIABLE
+    price_unit = Column(
+        String(20),
+        nullable=True,
+        comment='Unit for pricing: per KG, per CANDY, per MT, per BALE'
+    # Quality Parameters (JSONB for ANY commodity)
+    quality_params = Column(JSONB, nullable=True)
+    
+    # Test Report & Media (AI-ready for parameter extraction)
+    test_report_url = Column(String(500), nullable=True, comment='PDF/Image URL of lab test report')
+    test_report_verified = Column(Boolean, default=False, nullable=False)
+    test_report_data = Column(
+        JSONB,
+        nullable=True,
+        comment='AI-extracted parameters from test report: {"length": 29.0, "source": "OCR"}'
+    )
+    media_urls = Column(
+        JSONB,
+        nullable=True,
+        comment='Photo/video URLs for AI quality detection: {"photos": [url1, url2], "videos": [url3]}'
+    )
+    ai_detected_params = Column(
+        JSONB,
+        nullable=True,
+        comment='AI-detected quality from photos/videos: {"color": "white", "trash": 2.5, "confidence": 0.85}'
+    )
+    manual_override_params = Column(
+        Boolean,
+        default=False,
+        nullable=False,
+        comment='True if seller manually overrode AI-detected parameters'
+    )
+    
+    # AI Enhancement Fields
+        comment='Auto-calculated price per commodity base_unit'
+    )
     price_matrix = Column(JSONB, nullable=True)  # For MATRIX (quality tiers)
     currency = Column(String(3), default="INR", nullable=False)
-    price_uom = Column(String(20), nullable=True)  # Per MT, Quintal, Bale
+    price_uom = Column(String(20), nullable=True)  # DEPRECATED: Use price_unit
     
     # Quality Parameters (JSONB for ANY commodity)
     quality_params = Column(JSONB, nullable=True)

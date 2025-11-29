@@ -42,6 +42,11 @@ from backend.modules.trade_desk.enums import (
 )
 from backend.modules.trade_desk.models import Availability
 from backend.modules.trade_desk.repositories import AvailabilityRepository
+from backend.modules.commodity_master.services.unit_converter import UnitConverter
+from backend.modules.commodity_master.models import Commodity, CommodityParameter
+from backend.modules.settings.models import Location
+from backend.modules.partners.validators.insider_trading import InsiderTradingValidator
+from backend.modules.partners.cdps.capability_detection import CapabilityDetectionService
 
 
 class AvailabilityService:
@@ -77,9 +82,13 @@ class AvailabilityService:
         commodity_id: UUID,
         location_id: UUID,
         total_quantity: Decimal,
+        quantity_unit: str,  # 🔥 NEW: BALE, KG, MT, CANDY
         base_price: Optional[Decimal] = None,
+        price_unit: Optional[str] = None,  # 🔥 NEW: per KG, per CANDY
         price_matrix: Optional[Dict[str, Any]] = None,
         quality_params: Optional[Dict[str, Any]] = None,
+        test_report_url: Optional[str] = None,  # 🔥 NEW: Test report PDF/Image
+        media_urls: Optional[Dict[str, List[str]]] = None,  # 🔥 NEW: Photos/videos
         market_visibility: str = MarketVisibility.PUBLIC.value,
         allow_partial_order: bool = True,
         min_order_quantity: Optional[Decimal] = None,
@@ -90,26 +99,35 @@ class AvailabilityService:
         **kwargs
     ) -> Availability:
         """
-        Create new availability with AI enhancements.
+        Create new availability with AI enhancements + Unit Conversion + Quality Validation.
         
         Workflow:
-        1. Validate seller location (SELLER=own location, TRADER=any location)
-        2. Auto-normalize quality parameters (AI standardization)
-        3. Detect price anomalies (statistical + AI)
-        4. Calculate AI score vector (embeddings)
-        5. Auto-fetch delivery coordinates from location
-        6. Create availability
-        7. Emit availability.created event
-        8. Flush events to event store
+        1. Validate seller location (ALL sellers can sell from ANY location)
+        2. Validate commodity parameters (min/max/mandatory checking)
+        3. Auto-convert quantity_unit → commodity base_unit (CANDY → 355.6222 KG)
+        4. Auto-convert price_unit → price per base_unit
+        5. Extract parameters from test_report_url if provided (AI OCR)
+        6. Validate quality_params against CommodityParameter constraints
+        7. Auto-normalize quality parameters (AI standardization)
+        8. Detect price anomalies (statistical + AI)
+        9. Calculate AI score vector (embeddings)
+        10. Auto-fetch delivery coordinates from location
+        11. Create availability
+        12. Emit availability.created event
+        13. Flush events to event store
         
         Args:
             seller_id: Business partner UUID (SELLER or TRADER)
             commodity_id: Commodity UUID
             location_id: Location UUID (delivery location)
-            total_quantity: Total quantity available
+            total_quantity: Total quantity available (in quantity_unit)
+            quantity_unit: Unit of quantity (BALE, KG, MT, CANDY, QTL)
             base_price: Base price (for FIXED/NEGOTIABLE)
+            price_unit: Unit for pricing (per KG, per CANDY, per MT)
             price_matrix: Price matrix JSONB (for MATRIX type)
-            quality_params: Quality parameters JSONB
+            quality_params: Quality parameters JSONB (manually entered)
+            test_report_url: URL to test report PDF/Image (AI will extract parameters)
+            media_urls: Photo/video URLs (AI will detect quality): {"photos": [...], "videos": [...]}
             market_visibility: PUBLIC, PRIVATE, RESTRICTED, INTERNAL
             allow_partial_order: Allow partial fills
             min_order_quantity: Minimum order quantity
@@ -120,10 +138,10 @@ class AvailabilityService:
             **kwargs: Additional fields
         
         Returns:
-            Created availability with AI enhancements
+            Created availability with AI enhancements + unit conversion
         
         Raises:
-            ValueError: If validation fails
+            ValueError: If validation fails (location, parameters, mandatory fields)
         """
         # 1. Validate seller location (business rule enforcement)
         await self._validate_seller_location(seller_id, location_id)
@@ -182,7 +200,80 @@ class AvailabilityService:
                 f"Recommendation: {circular_check['recommendation']}"
             )
         
-        # 2. Auto-normalize quality parameters (AI standardization)
+        # ====================================================================
+        # 2A: 🚀 UNIT CONVERSION (Integrate with Commodity Master)
+        # Convert seller's trade_unit → commodity's base_unit
+        # Example: CANDY (355.6222) → KG, BALE (170 KG) → KG
+        # ====================================================================
+        from sqlalchemy import select
+        
+        # Fetch commodity to get base_unit
+        commodity_result = await self.db.execute(
+            select(Commodity).where(Commodity.id == commodity_id)
+        )
+        commodity = commodity_result.scalar_one_or_none()
+        
+        if not commodity:
+            raise ValueError(f"Commodity {commodity_id} not found")
+        
+        # Convert quantity to base_unit
+        quantity_in_base_unit = None
+        if commodity.base_unit and quantity_unit:
+            quantity_in_base_unit = UnitConverter.convert(
+                value=float(total_quantity),
+                from_unit=quantity_unit,
+                to_unit=commodity.base_unit
+            )
+            quantity_in_base_unit = Decimal(str(quantity_in_base_unit))
+        
+        # Convert price to price_per_base_unit
+        price_per_base_unit = None
+        if base_price and price_unit and commodity.base_unit:
+            # Price is per price_unit, need to convert to per base_unit
+            # Example: ₹8000 per CANDY → ₹8000 / 355.6222 = ₹22.50 per KG
+            conversion_factor = UnitConverter.get_conversion_factor(
+                from_unit=price_unit.replace("per ", ""),
+                to_unit=commodity.base_unit
+            )
+            price_per_base_unit = base_price / Decimal(str(conversion_factor))
+        
+        # ====================================================================
+        # 2B: 🚀 QUALITY PARAMETER VALIDATION (Against CommodityParameter)
+        # Validate min_value, max_value, is_mandatory constraints
+        # ====================================================================
+        test_report_data = None
+        ai_detected_params = None
+        manual_override_params = False
+        
+        # Extract parameters from test_report if provided
+        if test_report_url:
+            # TODO: Implement AI OCR extraction from test report PDF/Image
+            # This will be implemented in Phase 2 with AI integration
+            test_report_data = {"source": "manual", "note": "AI OCR not yet implemented"}
+        
+        # Detect quality from media if provided
+        if media_urls and (media_urls.get("photos") or media_urls.get("videos")):
+            # TODO: Implement AI computer vision quality detection
+            # This will be implemented in Phase 2 with AI integration
+            ai_detected_params = {"source": "manual", "note": "AI CV not yet implemented"}
+        
+        # Validate quality_params against CommodityParameter constraints
+        if quality_params:
+            await self._validate_quality_params(commodity_id, quality_params)
+            
+            # Check if user manually overrode AI-detected parameters
+            if ai_detected_params:
+                manual_override_params = True
+        else:
+            # If no quality_params provided, check if commodity has mandatory parameters
+            mandatory_params = await self._get_mandatory_parameters(commodity_id)
+            if mandatory_params:
+                raise ValueError(
+                    f"Quality parameters are mandatory for this commodity. "
+                    f"Required parameters: {', '.join(mandatory_params)}"
+                )
+        
+        # 2C. Auto-normalize quality parameters (AI standardization)
         if quality_params:
             quality_params = await self.normalize_quality_params(
                 commodity_id,
@@ -232,6 +323,8 @@ class AvailabilityService:
             commodity_id=commodity_id,
             location_id=location_id,
             total_quantity=total_quantity,
+            quantity_unit=quantity_unit,
+            quantity_in_base_unit=quantity_in_base_unit,
             available_quantity=total_quantity,  # Initially all available
             reserved_quantity=Decimal(0),
             sold_quantity=Decimal(0),
@@ -239,8 +332,16 @@ class AvailabilityService:
             allow_partial_order=allow_partial_order,
             price_type=price_type,
             base_price=base_price,
+            price_unit=price_unit,
+            price_per_base_unit=price_per_base_unit,
             price_matrix=price_matrix,
             quality_params=quality_params,
+            test_report_url=test_report_url,
+            test_report_verified=False,
+            test_report_data=test_report_data,
+            media_urls=media_urls,
+            ai_detected_params=ai_detected_params,
+            manual_override_params=manual_override_params,
             ai_score_vector=ai_score_vector,
             ai_suggested_price=ai_suggested_price,
             ai_confidence_score=ai_confidence_score,
@@ -437,6 +538,12 @@ class AvailabilityService:
         """
         Reserve quantity for negotiation (temporary hold).
         
+        INSIDER TRADING VALIDATION:
+        - Validates buyer != seller (same entity check)
+        - Validates master-branch relationships
+        - Validates corporate group membership
+        - Validates same GST number
+        
         Args:
             availability_id: Availability UUID
             quantity: Quantity to reserve
@@ -449,10 +556,39 @@ class AvailabilityService:
         
         Raises:
             ValueError: If cannot reserve
+            InsiderTradingError: If buyer and seller are corporate insiders
         """
         availability = await self.repo.get_by_id(availability_id, load_relationships=True)
         if not availability:
             raise ValueError("Availability not found")
+        
+        # ====================================================================
+        # 🚀 INSIDER TRADING VALIDATION
+        # Prevent buyer from reserving if they are corporate insiders with seller
+        # ====================================================================
+        insider_validator = InsiderTradingValidator(self.db)
+        
+        try:
+            is_valid, error_msg = await insider_validator.validate_trade_parties(
+                buyer_id=buyer_id,
+                seller_id=availability.seller_id,
+                raise_exception=True  # Will raise InsiderTradingError
+            )
+        except Exception as e:
+            # Emit rejection event
+            availability.emit_event(
+                event_type="reservation.rejected.insider_trading",
+                event_data={
+                    "availability_id": str(availability_id),
+                    "buyer_id": str(buyer_id),
+                    "seller_id": str(availability.seller_id),
+                    "reason": str(e),
+                    "rejected_by": "insider_trading_validator",
+                    "timestamp": datetime.now(timezone.utc).isoformat()
+                }
+            )
+            await availability.flush_events(self.db)
+            raise  # Re-raise the exception
         
         reservation_expiry = datetime.now(timezone.utc) + timedelta(hours=reservation_hours)
         
@@ -800,25 +936,30 @@ class AvailabilityService:
         """
         Validate seller can post from location.
         
-        Rules:
-        - SELLER: Can only sell from registered locations
-        - TRADER: Can sell from any location
+        UPDATED RULE (Nov 2024):
+        - ALL SELLERS: Can sell from ANY location (no restriction)
+        - Reason: Traders may source from multiple locations, sellers may have temporary stock
+        - Validation: Only check if location exists in settings_locations table
         
         Args:
             seller_id: Business partner UUID
             location_id: Location UUID
         
         Raises:
-            ValueError: If seller not allowed to post from location
-        
-        TODO: Implement actual validation by checking business_partner.partner_type
-        and business_partner.locations (many-to-many relationship)
+            ValueError: If location does not exist
         """
-        # TODO: Load business partner and check partner_type
-        # TODO: If SELLER, verify location_id in partner.locations
-        # TODO: If TRADER, allow any location
+        from sqlalchemy import select
         
-        # Placeholder: Allow all (implement actual validation later)
+        # Check if location exists
+        location_result = await self.db.execute(
+            select(Location).where(Location.id == location_id)
+        )
+        location = location_result.scalar_one_or_none()
+        
+        if not location:
+            raise ValueError(f"Location {location_id} does not exist")
+        
+        # No further validation - all sellers can sell from any location
         pass
     
     async def _get_delivery_coordinates(
@@ -837,14 +978,23 @@ class AvailabilityService:
                 "longitude": Decimal,
                 "region": str (WEST, SOUTH, etc.)
             }
-        
-        TODO: Query settings_locations table
         """
-        # TODO: Load location from database
-        # TODO: Return latitude, longitude, region
+        from sqlalchemy import select
         
-        # Placeholder: Return empty
-        return {}
+        # Query location from database
+        location_result = await self.db.execute(
+            select(Location).where(Location.id == location_id)
+        )
+        location = location_result.scalar_one_or_none()
+        
+        if not location:
+            return {}
+        
+        return {
+            "latitude": location.latitude,
+            "longitude": location.longitude,
+            "region": location.region
+        }
     
     async def _get_location_country(
         self,
@@ -858,13 +1008,117 @@ class AvailabilityService:
         
         Returns:
             str: Country name (e.g., "India", "USA", "China")
-        
-        TODO: Query actual location table when available
         """
-        # TODO: Load from settings_locations table
-        # For now, default to India (most common case)
-        # This will be properly implemented when location module is integrated
-        return "India"
+        from sqlalchemy import select
+        
+        # Query location from database
+        location_result = await self.db.execute(
+            select(Location).where(Location.id == location_id)
+        )
+        location = location_result.scalar_one_or_none()
+        
+        if not location:
+            return "India"  # Default to India if location not found
+        
+        # Return country from location
+        # Note: Location model may have country, state, region fields
+        # Defaulting to "India" for now as most locations are in India
+        return getattr(location, "country", "India")
+    
+    async def _validate_quality_params(
+        self,
+        commodity_id: UUID,
+        quality_params: Dict[str, Any]
+    ) -> None:
+        """
+        Validate quality parameters against CommodityParameter constraints.
+        
+        Checks:
+        - min_value <= value <= max_value
+        - All mandatory parameters are provided
+        
+        Args:
+            commodity_id: Commodity UUID
+            quality_params: Quality parameters to validate
+        
+        Raises:
+            ValueError: If validation fails
+        """
+        from sqlalchemy import select
+        
+        # Fetch commodity parameters
+        params_result = await self.db.execute(
+            select(CommodityParameter).where(
+                CommodityParameter.commodity_id == commodity_id
+            )
+        )
+        commodity_params = params_result.scalars().all()
+        
+        if not commodity_params:
+            # No parameters defined for commodity, nothing to validate
+            return
+        
+        # Build validation map
+        param_map = {param.parameter_name: param for param in commodity_params}
+        
+        # Check mandatory parameters
+        for param in commodity_params:
+            if param.is_mandatory and param.parameter_name not in quality_params:
+                raise ValueError(
+                    f"Mandatory parameter '{param.parameter_name}' is missing. "
+                    f"Expected value between {param.min_value} and {param.max_value}"
+                )
+        
+        # Validate min/max constraints
+        for param_name, param_value in quality_params.items():
+            if param_name not in param_map:
+                # Parameter not defined for commodity, skip validation
+                continue
+            
+            param_config = param_map[param_name]
+            
+            try:
+                value = float(param_value)
+            except (ValueError, TypeError):
+                raise ValueError(
+                    f"Parameter '{param_name}' must be a numeric value. "
+                    f"Got: {param_value}"
+                )
+            
+            if param_config.min_value is not None and value < float(param_config.min_value):
+                raise ValueError(
+                    f"Parameter '{param_name}' value {value} is below minimum {param_config.min_value}"
+                )
+            
+            if param_config.max_value is not None and value > float(param_config.max_value):
+                raise ValueError(
+                    f"Parameter '{param_name}' value {value} exceeds maximum {param_config.max_value}"
+                )
+    
+    async def _get_mandatory_parameters(
+        self,
+        commodity_id: UUID
+    ) -> List[str]:
+        """
+        Get list of mandatory parameter names for commodity.
+        
+        Args:
+            commodity_id: Commodity UUID
+        
+        Returns:
+            List of mandatory parameter names
+        """
+        from sqlalchemy import select
+        
+        # Fetch mandatory parameters
+        params_result = await self.db.execute(
+            select(CommodityParameter.parameter_name).where(
+                CommodityParameter.commodity_id == commodity_id,
+                CommodityParameter.is_mandatory == True
+            )
+        )
+        
+        return [row[0] for row in params_result.all()]
     
     # ========================
     # Search & Query Operations
@@ -876,16 +1130,21 @@ class AvailabilityService:
         **search_params
     ) -> List[Dict[str, Any]]:
         """
-        Search availabilities using AI-powered smart_search.
+        Search availabilities using AI-powered smart_search with INSIDER TRADING PRE-FILTER.
+        
+        PRE-FILTER LOGIC:
+        - If buyer_id provided, excludes availabilities where seller is corporate insider
+        - Prevents insider trading at search level (proactive blocking)
+        - Uses InsiderTradingValidator to get all blocked seller_ids
         
         Wrapper around repository.smart_search() with service-level logic.
         
         Args:
-            buyer_id: Buyer UUID (for visibility access control)
+            buyer_id: Buyer UUID (for visibility access control + insider trading filter)
             **search_params: Search parameters (commodity_id, quality_params, etc.)
         
         Returns:
-            List of enriched availability results with match scores
+            List of enriched availability results with match scores (insider traders excluded)
         """
         # Add default visibility for buyer
         if "market_visibility" not in search_params:
@@ -896,6 +1155,28 @@ class AvailabilityService:
         
         if buyer_id:
             search_params["buyer_id"] = buyer_id
+            
+            # ====================================================================
+            # 🚀 INSIDER TRADING PRE-FILTER
+            # Get all seller_ids that are corporate insiders with buyer
+            # Exclude them from search results
+            # ====================================================================
+            insider_validator = InsiderTradingValidator(self.db)
+            
+            insider_relationships = await insider_validator.get_all_insider_relationships(
+                partner_id=buyer_id
+            )
+            
+            # Collect all blocked seller_ids
+            blocked_seller_ids = set()
+            blocked_seller_ids.update(insider_relationships.get("same_entity", []))
+            blocked_seller_ids.update(insider_relationships.get("master_branch", []))
+            blocked_seller_ids.update(insider_relationships.get("corporate_group", []))
+            blocked_seller_ids.update(insider_relationships.get("same_gst", []))
+            
+            # Add to search params (repository will exclude these)
+            if blocked_seller_ids:
+                search_params["excluded_seller_ids"] = list(blocked_seller_ids)
         
         return await self.repo.smart_search(**search_params)
     
