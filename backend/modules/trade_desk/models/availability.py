@@ -133,6 +133,14 @@ class Availability(Base, EventMixin):
         String(20),
         nullable=True,
         comment='Unit for pricing: per KG, per CANDY, per MT, per BALE'
+    )
+    price_per_base_unit = Column(
+        Numeric(15, 2),
+        nullable=True,
+        comment='Auto-calculated price per base_unit for consistent matching'
+    )
+    price_matrix = Column(JSONB, nullable=True)  # For MATRIX type
+    
     # Quality Parameters (JSONB for ANY commodity)
     quality_params = Column(JSONB, nullable=True)
     
