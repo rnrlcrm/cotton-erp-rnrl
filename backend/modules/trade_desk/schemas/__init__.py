@@ -59,7 +59,17 @@ class AvailabilityCreateRequest(BaseModel):
     
     # ========== MANDATORY FIELDS ==========
     commodity_id: UUID = Field(..., description="Commodity UUID (REQUIRED)")
-    location_id: UUID = Field(..., description="Location UUID - seller can use ANY location (REQUIRED)")
+    
+    # LOCATION: Either registered location_id OR ad-hoc location details
+    location_id: Optional[UUID] = Field(None, description="Registered location UUID (use this OR provide ad-hoc location)")
+    
+    # AD-HOC LOCATION (if location_id not provided, these become REQUIRED)
+    location_address: Optional[str] = Field(None, description="Full address (required if location_id not provided)")
+    location_latitude: Optional[Decimal] = Field(None, description="Latitude from Google Maps (required if location_id not provided)")
+    location_longitude: Optional[Decimal] = Field(None, description="Longitude from Google Maps (required if location_id not provided)")
+    location_pincode: Optional[str] = Field(None, description="Pincode (optional for ad-hoc location)")
+    location_region: Optional[str] = Field(None, description="Region/State (optional for ad-hoc location)")
+    
     total_quantity: Decimal = Field(..., gt=0, description="Total quantity available (REQUIRED)")
     quality_params: Dict[str, Any] = Field(
         ..., 
@@ -101,23 +111,65 @@ class AvailabilityCreateRequest(BaseModel):
             raise ValueError("quality_params cannot be empty - at least one parameter required")
         return v
     
+    @model_validator(mode='after')
+    def validate_location(self):
+        """Ensure EITHER location_id OR ad-hoc location is provided."""
+        has_location_id = self.location_id is not None
+        has_adhoc = all([
+            self.location_address,
+            self.location_latitude is not None,
+            self.location_longitude is not None
+        ])
+        
+        if not has_location_id and not has_adhoc:
+            raise ValueError(
+                "Must provide EITHER location_id (registered) OR ad-hoc location "
+                "(location_address + location_latitude + location_longitude)"
+            )
+        
+        if has_location_id and has_adhoc:
+            raise ValueError(
+                "Cannot provide BOTH location_id and ad-hoc location. Choose one."
+            )
+        
+        return self
+    
     class Config:
         json_schema_extra = {
-            "example": {
-                "commodity_id": "123e4567-e89b-12d3-a456-426614174000",
-                "location_id": "123e4567-e89b-12d3-a456-426614174001",
-                "total_quantity": 100.0,
-                "base_price": 8000.0,
-                "quality_params": {
-                    "length": 29.0,
-                    "strength": 26.0,
-                    "micronaire": 4.5
+            "examples": [
+                {
+                    "description": "Using REGISTERED location from settings table",
+                    "value": {
+                        "commodity_id": "123e4567-e89b-12d3-a456-426614174000",
+                        "location_id": "123e4567-e89b-12d3-a456-426614174001",
+                        "total_quantity": 100.0,
+                        "base_price": 8000.0,
+                        "quality_params": {
+                            "length": 29.0,
+                            "strength": 26.0,
+                            "micronaire": 4.5
+                        }
+                    }
                 },
-                "test_report_url": "https://storage.example.com/test-reports/abc123.pdf",
-                "media_urls": {
-                    "photos": ["https://storage.example.com/photos/cotton1.jpg"],
-                    "videos": []
-                },
+                {
+                    "description": "Using AD-HOC location with Google Maps coordinates",
+                    "value": {
+                        "commodity_id": "123e4567-e89b-12d3-a456-426614174000",
+                        "location_address": "Warehouse 5, GIDC Industrial Area, Surat, Gujarat",
+                        "location_latitude": 21.1702,
+                        "location_longitude": 72.8311,
+                        "location_pincode": "395008",
+                        "location_region": "Gujarat",
+                        "total_quantity": 100.0,
+                        "base_price": 8000.0,
+                        "quality_params": {
+                            "length": 29.0,
+                            "strength": 26.0,
+                            "micronaire": 4.5
+                        }
+                    }
+                }
+            ],
                 "market_visibility": "PUBLIC",
                 "allow_partial_order": True,
                 "min_order_quantity": 10.0,

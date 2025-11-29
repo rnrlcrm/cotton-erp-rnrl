@@ -80,8 +80,8 @@ class AvailabilityService:
         self,
         seller_id: UUID,
         commodity_id: UUID,
-        location_id: UUID,
-        total_quantity: Decimal,
+        location_id: Optional[UUID] = None,  # 🔥 OPTIONAL: registered OR ad-hoc
+        total_quantity: Decimal = None,
         quantity_unit: Optional[str] = None,  # 🔥 AUTO-POPULATED from commodity.trade_unit
         base_price: Optional[Decimal] = None,
         price_unit: Optional[str] = None,  # 🔥 AUTO-POPULATED from commodity.rate_unit
@@ -93,9 +93,18 @@ class AvailabilityService:
         allow_partial_order: bool = True,
         min_order_quantity: Optional[Decimal] = None,
         delivery_terms: Optional[str] = None,
+        delivery_address: Optional[str] = None,
         expiry_date: Optional[datetime] = None,
+        notes: Optional[str] = None,
+        tags: Optional[List[str]] = None,
         created_by: UUID = None,
         auto_approve: bool = False,
+        # 🔥 AD-HOC LOCATION (Google Maps coordinates)
+        location_address: Optional[str] = None,
+        location_latitude: Optional[Decimal] = None,
+        location_longitude: Optional[Decimal] = None,
+        location_pincode: Optional[str] = None,
+        location_region: Optional[str] = None,
         **kwargs
     ) -> Availability:
         """
@@ -120,7 +129,12 @@ class AvailabilityService:
         Args:
             seller_id: Business partner UUID (SELLER or TRADER)
             commodity_id: Commodity UUID
-            location_id: Location UUID (delivery location)
+            location_id: Location UUID (OPTIONAL - use this OR ad-hoc location)
+            location_address: Ad-hoc location address (if location_id not provided)
+            location_latitude: Ad-hoc latitude from Google Maps
+            location_longitude: Ad-hoc longitude from Google Maps
+            location_pincode: Ad-hoc pincode (optional)
+            location_region: Ad-hoc region/state (optional)
             total_quantity: Total quantity available (in trade_unit from commodity)
             quantity_unit: AUTO-POPULATED from commodity.trade_unit (DO NOT SEND)
             base_price: Base price (for FIXED/NEGOTIABLE)
@@ -171,8 +185,38 @@ class AvailabilityService:
                     "Please update commodity master data."
                 )
         
-        # 1. Validate seller location (business rule enforcement)
-        await self._validate_seller_location(seller_id, location_id)
+        # 1. Validate and resolve location (registered OR ad-hoc)
+        actual_location_id = None
+        delivery_latitude = None
+        delivery_longitude = None
+        delivery_region = None
+        
+        if location_id:
+            # SCENARIO 1: Using registered location from settings table
+            await self._validate_seller_location(seller_id, location_id)
+            actual_location_id = location_id
+            
+            # Fetch coordinates from registered location
+            delivery_coords = await self._get_delivery_coordinates(location_id)
+            delivery_latitude = delivery_coords.get("latitude")
+            delivery_longitude = delivery_coords.get("longitude")
+            delivery_region = delivery_coords.get("region")
+        else:
+            # SCENARIO 2: Using ad-hoc location (Google Maps coordinates)
+            if not all([location_address, location_latitude is not None, location_longitude is not None]):
+                raise ValueError(
+                    "Ad-hoc location requires: location_address, location_latitude, location_longitude"
+                )
+            
+            # Use ad-hoc coordinates directly (no location_id stored)
+            actual_location_id = None  # NULL in database
+            delivery_latitude = location_latitude
+            delivery_longitude = location_longitude
+            delivery_region = location_region  # May be None
+            
+            # Update delivery_address if not provided
+            if not delivery_address:
+                delivery_address = location_address
         
         # ====================================================================
         # 1A: 🚀 CAPABILITY VALIDATION (CDPS - Capability-Driven Partner System)
@@ -182,7 +226,11 @@ class AvailabilityService:
         from backend.modules.trade_desk.validators.capability_validator import TradeCapabilityValidator
         
         # Get location country for capability check
-        location_country = await self._get_location_country(location_id)
+        if actual_location_id:
+            location_country = await self._get_location_country(actual_location_id)
+        else:
+            # Ad-hoc location: derive country from region or default to India
+            location_country = location_region if location_region else "India"
         
         capability_validator = TradeCapabilityValidator(self.db)
         await capability_validator.validate_sell_capability(
@@ -227,16 +275,7 @@ class AvailabilityService:
         # Convert seller's trade_unit → commodity's base_unit
         # Example: CANDY (355.6222) → KG, BALE (170 KG) → KG
         # ====================================================================
-        from sqlalchemy import select
-        
-        # Fetch commodity to get base_unit
-        commodity_result = await self.db.execute(
-            select(Commodity).where(Commodity.id == commodity_id)
-        )
-        commodity = commodity_result.scalar_one_or_none()
-        
-        if not commodity:
-            raise ValueError(f"Commodity {commodity_id} not found")
+        # Commodity already fetched in step 0 for auto-unit population
         
         # Convert quantity to base_unit
         quantity_in_base_unit = None
@@ -324,11 +363,8 @@ class AvailabilityService:
             base_price or Decimal(0)
         )
         
-        # 5. Auto-fetch delivery coordinates from location
-        delivery_coords = await self._get_delivery_coordinates(location_id)
-        delivery_latitude = delivery_coords.get("latitude")
-        delivery_longitude = delivery_coords.get("longitude")
-        delivery_region = delivery_coords.get("region")
+        # 5. Delivery coordinates already fetched in step 1 (registered or ad-hoc)
+        # delivery_latitude, delivery_longitude, delivery_region are ready
         
         # 6. Determine price type
         price_type = PriceType.MATRIX.value if price_matrix else PriceType.FIXED.value
@@ -343,7 +379,7 @@ class AvailabilityService:
         availability = Availability(
             seller_id=seller_id,
             commodity_id=commodity_id,
-            location_id=location_id,
+            location_id=actual_location_id,  # NULL for ad-hoc locations
             total_quantity=total_quantity,
             quantity_unit=quantity_unit,
             quantity_in_base_unit=quantity_in_base_unit,
@@ -370,10 +406,13 @@ class AvailabilityService:
             ai_price_anomaly_flag=price_anomaly_flag,
             market_visibility=market_visibility,
             delivery_terms=delivery_terms,
+            delivery_address=delivery_address,  # 🔥 Ad-hoc or registered
             delivery_latitude=delivery_latitude,
             delivery_longitude=delivery_longitude,
             delivery_region=delivery_region,
             expiry_date=expiry_date,
+            notes=notes,
+            tags=tags,
             status=AvailabilityStatus.DRAFT.value,
             approval_status=approval_status,
             created_by=created_by,

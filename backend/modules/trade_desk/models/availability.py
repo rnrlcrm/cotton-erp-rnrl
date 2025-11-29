@@ -98,8 +98,9 @@ class Availability(Base, EventMixin):
     location_id = Column(
         PostgreSQLUUID(as_uuid=True),
         ForeignKey("settings_locations.id", ondelete="RESTRICT"),
-        nullable=False,
-        index=True
+        nullable=True,  # 🔥 NULLABLE: Ad-hoc locations use NULL + coordinates
+        index=True,
+        comment='Registered location ID (NULL for ad-hoc Google Maps locations)'
     )
     seller_id = Column(
         PostgreSQLUUID(as_uuid=True),
