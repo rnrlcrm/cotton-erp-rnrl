@@ -7,7 +7,7 @@ Extracted from router to maintain clean architecture for 15 years.
 NO business logic changes - pure extraction.
 """
 
-from typing import List, Optional
+from typing import List, Optional, Literal
 from uuid import UUID
 
 from fastapi import UploadFile
@@ -15,7 +15,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.modules.partners.repositories import PartnerDocumentRepository
 from backend.modules.partners.models import PartnerDocument
-from backend.modules.partners.enums import DocumentType, DocumentStatus
+from backend.modules.partners.enums import DocumentType
+
+# Document status literals (not enum - stored as strings)
+DocumentStatusType = Literal["pending", "approved", "rejected", "expired"]
 
 
 class PartnerDocumentService:
@@ -63,7 +66,7 @@ class PartnerDocumentService:
             file_size=len(file_content),
             file_content=file_content,
             uploaded_by=uploaded_by,
-            status=DocumentStatus.PENDING,
+            status="pending",
         )
         
         return document
@@ -95,7 +98,7 @@ class PartnerDocumentService:
     async def update_document_status(
         self,
         document_id: UUID,
-        status: DocumentStatus,
+        status: DocumentStatusType,
         verified_by: Optional[UUID] = None,
         rejection_reason: Optional[str] = None,
     ) -> PartnerDocument:
