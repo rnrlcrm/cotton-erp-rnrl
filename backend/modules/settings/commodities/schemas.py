@@ -2,13 +2,15 @@
 Commodity Module Schemas
 
 Pydantic schemas for validation and serialization.
+Includes unit conversion schemas for Trade Desk integration.
 """
 
 from __future__ import annotations
 
 from datetime import datetime
 from decimal import Decimal
-from typing import List, Optional
+from typing import List, Optional, Dict
+from uuid import UUID
 from uuid import UUID
 
 from pydantic import BaseModel, Field, field_validator
@@ -23,7 +25,32 @@ class CommodityBase(BaseModel):
     hsn_code: Optional[str] = Field(None, max_length=20)
     gst_rate: Optional[Decimal] = Field(None, ge=0, le=100)
     description: Optional[str] = None
+    
+    # LEGACY: Keep for backward compatibility
     uom: Optional[str] = Field(None, max_length=50)
+    
+    # UNIT CONVERSION FIELDS (NEW)
+    base_unit: str = Field(
+        default="KG", 
+        max_length=50,
+        description="Base storage unit (KG, METER, LITER, PIECE)"
+    )
+    trade_unit: Optional[str] = Field(
+        None, 
+        max_length=50,
+        description="Trading unit (BALE, BAG, MT, QTL, CANDY, etc.)"
+    )
+    rate_unit: Optional[str] = Field(
+        None, 
+        max_length=50,
+        description="Billing unit (CANDY, QTL, KG, MT, etc.)"
+    )
+    standard_weight_per_unit: Optional[Decimal] = Field(
+        None, 
+        ge=0,
+        description="Custom weight for BALE/BAG (uses catalog default if null)"
+    )
+    
     is_active: bool = True
 
 
@@ -39,7 +66,16 @@ class CommodityUpdate(BaseModel):
     hsn_code: Optional[str] = Field(None, max_length=20)
     gst_rate: Optional[Decimal] = Field(None, ge=0, le=100)
     description: Optional[str] = None
+    
+    # LEGACY
     uom: Optional[str] = Field(None, max_length=50)
+    
+    # UNIT CONVERSION FIELDS
+    base_unit: Optional[str] = Field(None, max_length=50)
+    trade_unit: Optional[str] = Field(None, max_length=50)
+    rate_unit: Optional[str] = Field(None, max_length=50)
+    standard_weight_per_unit: Optional[Decimal] = Field(None, ge=0)
+    
     is_active: Optional[bool] = None
 
 
@@ -50,6 +86,12 @@ class CommodityResponse(CommodityBase):
     updated_by: Optional[UUID]
     created_at: datetime
     updated_at: Optional[datetime]
+    
+    # UNIT CONVERSION FIELDS (explicitly included for clarity)
+    base_unit: str  # Inherited from CommodityBase but made explicit
+    trade_unit: Optional[str] = None
+    rate_unit: Optional[str] = None
+    standard_weight_per_unit: Optional[Decimal] = None
     
     model_config = {"from_attributes": True}
 
@@ -468,3 +510,110 @@ CommissionStructureUpdate = CommissionUpdate
 CommissionStructureResponse = CommissionResponse
 
 BulkOperationResult = BulkUploadResult  # Alias
+
+
+# ==================== Unit Conversion Schemas ====================
+
+class ConversionCalculationRequest(BaseModel):
+    """Request schema for conversion calculation endpoint"""
+    trade_quantity: Decimal = Field(..., gt=0, description="Quantity in trade units (e.g., 600 BALES)")
+    rate_per_unit: Decimal = Field(..., gt=0, description="Rate per rate unit (e.g., ₹50,000 per CANDY)")
+    
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "trade_quantity": 600,
+                "rate_per_unit": 50000
+            }
+        }
+
+
+class ConversionCalculationResponse(BaseModel):
+    """Response schema for conversion calculation with complete breakdown"""
+    commodity_id: UUID
+    commodity_name: str
+    
+    # Input values
+    trade_quantity: Decimal
+    trade_unit: str
+    rate_per_unit: Decimal
+    rate_unit: str
+    
+    # Calculated values
+    quantity_in_base_unit: Decimal
+    base_unit: str
+    rate_per_base_unit: Decimal
+    theoretical_billing_amount: Decimal
+    
+    # Breakdown details
+    conversion_factors: dict = Field(
+        ...,
+        description="Conversion factors used",
+        json_schema_extra={
+            "example": {
+                "trade_unit_to_base": "1 BALE = 170 KG",
+                "rate_unit_to_base": "1 CANDY = 355.6222 KG"
+            }
+        }
+    )
+    
+    calculation_formula: str = Field(
+        ...,
+        description="Human-readable calculation formula",
+        json_schema_extra={
+            "example": "600 BALES × 170 KG/BALE × 0.002812 CANDY/KG × ₹50,000/CANDY = ₹14,341,200"
+        }
+    )
+    
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "commodity_id": "123e4567-e89b-12d3-a456-426614174000",
+                "commodity_name": "Cotton (Shankar-6)",
+                "trade_quantity": 600,
+                "trade_unit": "BALE",
+                "rate_per_unit": 50000,
+                "rate_unit": "CANDY",
+                "quantity_in_base_unit": 102000,
+                "base_unit": "KG",
+                "rate_per_base_unit": 140.61,
+                "theoretical_billing_amount": 14341200,
+                "conversion_factors": {
+                    "trade_unit_to_base": "1 BALE = 170 KG",
+                    "rate_unit_to_base": "1 CANDY = 355.6222 KG"
+                },
+                "calculation_formula": "600 BALES × 170 KG/BALE × 0.002812 CANDY/KG × ₹50,000/CANDY = ₹14,341,200"
+            }
+        }
+
+
+class UnitInfo(BaseModel):
+    """Unit information schema"""
+    code: str
+    name: str
+    category: str
+    base_unit: str
+    conversion_factor: Decimal
+    description: Optional[str] = None
+
+
+class UnitsListResponse(BaseModel):
+    """Response schema for units list endpoint"""
+    categories: List[str]
+    units_by_category: dict = Field(
+        ...,
+        description="Units grouped by category",
+        json_schema_extra={
+            "example": {
+                "weight": [
+                    {"code": "KG", "name": "Kilogram", "conversion_factor": "1.00"},
+                    {"code": "CANDY", "name": "Candy", "conversion_factor": "355.6222"}
+                ],
+                "count": [
+                    {"code": "BALE", "name": "Bale (Cotton)", "conversion_factor": "170.00"}
+                ]
+            }
+        }
+    )
+    total_units: int
+
