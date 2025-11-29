@@ -245,6 +245,8 @@ class RiskAssessment(BaseModel):
     verification_score: int
     flags: List[str] = []
     recommendation: str
+    approval_route: str  # "auto", "manager", "director", "director_with_checks"
+    recommended_credit_limit: Optional[Decimal] = None
 
 
 class OnboardingApplicationResponse(BaseModel):

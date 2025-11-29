@@ -305,8 +305,7 @@ class TestPartnerOnboardingWorkflow:
 
         # Approve
         decision = ApprovalDecision(
-            approved=True,
-            approved_by=manager_id,
+            decision="approve",
             notes="Verified documents and background"
         )
         

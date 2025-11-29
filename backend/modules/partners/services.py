@@ -388,8 +388,16 @@ class RiskScoringService:
         score = 50  # Base score
         factors = []
         
+        # Track individual component scores
+        business_age_score = 0
+        entity_type_score = 0
+        tax_compliance_score = 0
+        documentation_score = 0
+        verification_score = 0
+        
         # === Business Age ===
         if business_age_months >= 60:  # 5+ years
+            business_age_score = 20
             score += 20
             factors.append({
                 "factor": "Business Age",
@@ -398,6 +406,7 @@ class RiskScoringService:
                 "points": 20
             })
         elif business_age_months >= 24:  # 2+ years
+            business_age_score = 10
             score += 10
             factors.append({
                 "factor": "Business Age",
@@ -406,6 +415,7 @@ class RiskScoringService:
                 "points": 10
             })
         elif business_age_months < 12:  # <1 year
+            business_age_score = -15
             score -= 15
             factors.append({
                 "factor": "Business Age",
@@ -416,6 +426,7 @@ class RiskScoringService:
         
         # === Entity Type ===
         if entity_type in [BusinessEntityType.PRIVATE_LIMITED, BusinessEntityType.PUBLIC_LIMITED]:
+            entity_type_score = 15
             score += 15
             factors.append({
                 "factor": "Entity Type",
@@ -424,6 +435,7 @@ class RiskScoringService:
                 "points": 15
             })
         elif entity_type == BusinessEntityType.PARTNERSHIP:
+            entity_type_score = 5
             score += 5
             factors.append({
                 "factor": "Entity Type",
@@ -432,6 +444,7 @@ class RiskScoringService:
                 "points": 5
             })
         elif entity_type == BusinessEntityType.PROPRIETORSHIP:
+            entity_type_score = -5
             score -= 5
             factors.append({
                 "factor": "Entity Type",
@@ -469,6 +482,7 @@ class RiskScoringService:
         
         # === GST Compliance ===
         if gst_compliance == "Excellent":
+            tax_compliance_score = 15
             score += 15
             factors.append({
                 "factor": "Tax Compliance",
@@ -477,6 +491,7 @@ class RiskScoringService:
                 "points": 15
             })
         elif gst_compliance == "Good":
+            tax_compliance_score = 10
             score += 10
             factors.append({
                 "factor": "Tax Compliance",
@@ -485,6 +500,7 @@ class RiskScoringService:
                 "points": 10
             })
         elif gst_compliance == "Poor":
+            tax_compliance_score = -25
             score -= 25
             factors.append({
                 "factor": "Tax Compliance",
@@ -530,16 +546,21 @@ class RiskScoringService:
             category = RiskCategory.CRITICAL
             approval_route = "director_with_checks"
         
+        # Extract flag strings from factors
+        flag_strings = [f"{f['factor']}: {f['detail']}" for f in factors]
+        
         return RiskAssessment(
             total_score=score,
             category=category,
-            business_age_score=scores["business_age"],
-            entity_type_score=scores["entity_type"],
-            tax_compliance_score=scores["tax_compliance"],
-            documentation_score=scores.get("documentation", 0),
-            verification_score=scores.get("verification", 0),
-            flags=factors,
-            recommendation=f"{category.value} risk - {approval_route}"
+            business_age_score=business_age_score,
+            entity_type_score=entity_type_score,
+            tax_compliance_score=tax_compliance_score,
+            documentation_score=documentation_score,
+            verification_score=verification_score,
+            flags=flag_strings,
+            recommendation=f"{category.value} risk - {approval_route}",
+            approval_route=approval_route,
+            recommended_credit_limit=self._calculate_credit_limit(score, gst_turnover)
         )
     
     def _calculate_credit_limit(
@@ -610,41 +631,47 @@ class ApprovalService:
         if not application:
             raise ValueError("Application not found")
         
-        if decision.approved:
+        if decision.decision == "approve":
+            # Use provided credit limit or default from risk assessment
+            credit_limit = decision.credit_limit or risk_assessment.recommended_credit_limit
+            
             # Create BusinessPartner record
             partner = await self.bp_repo.create(
-                organization_id=application.organization_id,
                 partner_type=application.partner_type,
-                legal_business_name=application.legal_business_name,
+                legal_name=application.legal_name,
                 trade_name=application.trade_name,
+                country=application.primary_country,
                 tax_id_number=application.tax_id_number,
                 pan_number=application.pan_number,
-                entity_type=application.entity_type,
-                business_registration_number=application.business_registration_number,
-                business_registration_date=application.business_registration_date,
+                business_entity_type=application.business_entity_type,
+                registration_date=application.registration_date,
+                bank_account_name=application.bank_account_name,
+                bank_name=application.bank_name,
+                bank_account_number=application.bank_account_number,
+                bank_routing_code=application.bank_routing_code,
                 primary_address=application.primary_address,
                 primary_city=application.primary_city,
                 primary_state=application.primary_state,
                 primary_postal_code=application.primary_postal_code,
                 primary_country=application.primary_country,
-                primary_latitude=application.primary_latitude,
-                primary_longitude=application.primary_longitude,
-                location_geocoded=application.location_geocoded,
-                location_confidence=application.location_confidence,
-                primary_contact_person=application.primary_contact_person,
+                primary_latitude=getattr(application, 'primary_latitude', None),
+                primary_longitude=getattr(application, 'primary_longitude', None),
+                location_geocoded=getattr(application, 'location_geocoded', False),
+                location_confidence=getattr(application, 'location_confidence', None),
+                primary_contact_name=application.primary_contact_name,
                 primary_contact_email=application.primary_contact_email,
                 primary_contact_phone=application.primary_contact_phone,
+                primary_currency=application.primary_currency,
                 risk_score=risk_assessment.total_score,
-                risk_category=risk_assessment.risk_category,
-                risk_assessment={"factors": risk_assessment.factors},
-                credit_limit=risk_assessment.recommended_credit_limit,
-                status=PartnerStatus.ACTIVE,
+                risk_category=risk_assessment.category,
+                risk_assessment={"flags": risk_assessment.flags},
+                credit_limit=credit_limit,
+                status=PartnerStatus.APPROVED,
                 kyc_status=KYCStatus.VERIFIED,
                 kyc_verified_at=datetime.utcnow(),
                 kyc_expiry_date=datetime.utcnow() + timedelta(days=365),  # 1 year
-                approved_by=decision.approved_by or self.current_user_id,
+                approved_by=self.current_user_id,
                 approved_at=datetime.utcnow(),
-                approval_notes=decision.notes,
                 created_by=self.current_user_id
             )
             
@@ -653,21 +680,29 @@ class ApprovalService:
                 application_id,
                 status="approved",
                 approved_at=datetime.utcnow(),
-                approved_by=decision.approved_by or self.current_user_id
+                approved_by=self.current_user_id
             )
             
             return partner
-        else:
+        elif decision.decision == "reject":
             # Rejection
             await self.app_repo.update(
                 application_id,
                 status="rejected",
                 rejected_at=datetime.utcnow(),
-                rejected_by=decision.approved_by or self.current_user_id,
-                rejection_reason=decision.rejection_reason
+                rejected_by=self.current_user_id,
+                rejection_reason=decision.notes
             )
             
-            raise ValueError(f"Application rejected: {decision.rejection_reason}")
+            raise ValueError(f"Application rejected: {decision.notes}")
+        else:
+            # Request more info
+            await self.app_repo.update(
+                application_id,
+                status="info_requested",
+                notes=decision.notes
+            )
+            raise ValueError(f"More information requested: {decision.notes}")
 
 
 class KYCRenewalService:
@@ -976,7 +1011,7 @@ class PartnerService:
         await self.app_repo.update(
             application_id,
             risk_score=risk_assessment.total_score,
-            risk_category=risk_assessment.risk_category,
+            risk_category=risk_assessment.category,
             status="pending_approval",
             submitted_at=datetime.utcnow()
         )
@@ -987,8 +1022,7 @@ class PartnerService:
                 application_id,
                 risk_assessment,
                 ApprovalDecision(
-                    approved=True,
-                    approved_by=None,  # System auto-approval
+                    decision="approve",
                     notes="Auto-approved based on low risk score"
                 )
             )
