@@ -21,7 +21,7 @@ from datetime import datetime
 from typing import List, Optional
 from uuid import UUID
 
-from sqlalchemy import and_, or_, select
+from sqlalchemy import and_, or_, select, case
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.core.security.context import (
@@ -395,7 +395,7 @@ class PartnerLocationRepository:
     async def get_by_partner(
         self,
         partner_id: UUID,
-        is_primary: Optional[bool] = None
+        location_type: Optional[str] = None
     ) -> List[PartnerLocation]:
         """Get all locations for a partner with isolation"""
         query = select(PartnerLocation).where(
@@ -408,10 +408,17 @@ class PartnerLocationRepository:
         # Apply isolation filter
         query = self._apply_isolation_filter(query, partner_id)
         
-        if is_primary is not None:
-            query = query.where(PartnerLocation.is_primary == is_primary)
+        if location_type is not None:
+            query = query.where(PartnerLocation.location_type == location_type)
         
-        query = query.order_by(PartnerLocation.is_primary.desc(), PartnerLocation.created_at)
+        # Order by location_type (principal first) then created_at
+        query = query.order_by(
+            case(
+                (PartnerLocation.location_type == "principal", 0),
+                else_=1
+            ),
+            PartnerLocation.created_at
+        )
         
         result = await self.db.execute(query)
         return list(result.scalars().all())
@@ -496,16 +503,13 @@ class PartnerEmployeeRepository:
     ) -> List[PartnerEmployee]:
         """Get all employees for a partner"""
         query = select(PartnerEmployee).where(
-            and_(
-                PartnerEmployee.partner_id == partner_id,
-                PartnerEmployee.is_deleted == False
-            )
+            PartnerEmployee.partner_id == partner_id
         )
         
-        if is_active is not None:
-            query = query.where(PartnerEmployee.is_active == is_active)
+        if status is not None:
+            query = query.where(PartnerEmployee.status == status)
         
-        query = query.order_by(PartnerEmployee.created_at)
+        query = query.order_by(PartnerEmployee.invited_at)
         
         result = await self.db.execute(query)
         return list(result.scalars().all())

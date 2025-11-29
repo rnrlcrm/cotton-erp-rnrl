@@ -731,6 +731,7 @@ class TestPartnerLocations:
                 location_name=f"Branch {i}",
                 address=f"Address {i}",
                 city=f"City {i}",
+                postal_code=f"40000{i}",
                 country="India",
             )
             for i in range(3)
