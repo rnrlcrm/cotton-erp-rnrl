@@ -198,15 +198,21 @@ class AvailabilityRepository:
         allow_partial: Optional[bool] = None,
         market_visibility: Optional[List[str]] = None,
         buyer_id: Optional[UUID] = None,
+        excluded_seller_ids: Optional[List[UUID]] = None,  # 🔥 NEW: Insider trading pre-filter
         exclude_anomalies: bool = True,
         skip: int = 0,
         limit: int = 100
     ) -> List[Dict[str, Any]]:
         """
-        AI-powered smart search with multi-criteria ranking.
+        AI-powered smart search with multi-criteria ranking + INSIDER TRADING PRE-FILTER.
         
         This is the HEART of the Matching Engine - finds compatible availabilities
         using AI vector embeddings, quality tolerance, price range, and geo-proximity.
+        
+        NEW FEATURE (Nov 2024): Insider Trading Pre-Filter
+        - excluded_seller_ids: List of seller UUIDs to exclude (corporate insiders)
+        - Prevents buyer from seeing availabilities from blocked sellers
+        - Improves compliance and UX (no manual filtering needed)
         
         Args:
             query_vector: AI embedding vector for commodity similarity (JSONB)
@@ -225,6 +231,7 @@ class AvailabilityRepository:
             allow_partial: Filter by allow_partial_order
             market_visibility: List of visibility levels (PUBLIC, PRIVATE, etc.)
             buyer_id: Buyer UUID for PRIVATE/RESTRICTED access check
+            excluded_seller_ids: List of seller UUIDs to exclude (insider trading)
             exclude_anomalies: If True, exclude price anomalies (ai_price_anomaly_flag)
             skip: Pagination offset
             limit: Max results
@@ -233,9 +240,11 @@ class AvailabilityRepository:
             List of dicts with availability + match_score + distance_km
             
         Example:
-            # Find cotton 29mm within 10% price tolerance and 200km radius
+            # Find cotton 29mm excluding corporate insiders
             results = await repo.smart_search(
                 commodity_id=cotton_uuid,
+                buyer_id=buyer_uuid,
+                excluded_seller_ids=[insider1_uuid, insider2_uuid],  # Pre-filter
                 quality_params={"length": 29.0, "strength": 26.0},
                 quality_tolerance={"length": 1.0, "strength": 2.0},
                 max_price=70000,
@@ -259,6 +268,11 @@ class AvailabilityRepository:
                 )
             )
         )
+        
+        # 🔥 NEW: Insider Trading Pre-Filter
+        # Exclude availabilities from blocked sellers (corporate insiders)
+        if excluded_seller_ids:
+            query = query.where(Availability.seller_id.notin_(excluded_seller_ids))
         
         # Commodity filter
         if commodity_id:

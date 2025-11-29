@@ -38,14 +38,62 @@ from backend.modules.trade_desk.schemas.requirement_schemas import (
 # ========================
 
 class AvailabilityCreateRequest(BaseModel):
-    """Request schema for creating availability."""
+    """
+    Request schema for creating availability.
     
-    commodity_id: UUID
-    location_id: UUID
-    total_quantity: Decimal = Field(gt=0, description="Total quantity available")
-    base_price: Optional[Decimal] = Field(None, gt=0, description="Base price (for FIXED/NEGOTIABLE)")
+    MANDATORY FIELDS (as per business rules):
+    - commodity_id: What is being sold
+    - location_id: Where it's available (seller can use ANY location)
+    - total_quantity: How much is available
+    - quality_params: Quality parameters (commodity-specific, validated against CommodityParameter)
+    
+    AUTO-POPULATED FIELDS:
+    - quantity_unit: Auto-populated from commodity.trade_unit (BALE, KG, CANDY, etc.)
+    - price_unit: Auto-populated from commodity.rate_unit (per KG, per CANDY, etc.)
+    
+    OPTIONAL FIELDS:
+    - base_price: Price is optional (can be negotiable/on-request)
+    - test_report_url: Optional lab test report
+    - media_urls: Optional photos/videos for AI quality detection
+    """
+    
+    # ========== MANDATORY FIELDS ==========
+    commodity_id: UUID = Field(..., description="Commodity UUID (REQUIRED)")
+    
+    # LOCATION: Either registered location_id OR ad-hoc location details
+    location_id: Optional[UUID] = Field(None, description="Registered location UUID (use this OR provide ad-hoc location)")
+    
+    # AD-HOC LOCATION (if location_id not provided, these become REQUIRED)
+    location_address: Optional[str] = Field(None, description="Full address (required if location_id not provided)")
+    location_latitude: Optional[Decimal] = Field(None, description="Latitude from Google Maps (required if location_id not provided)")
+    location_longitude: Optional[Decimal] = Field(None, description="Longitude from Google Maps (required if location_id not provided)")
+    location_pincode: Optional[str] = Field(None, description="Pincode (optional for ad-hoc location)")
+    location_region: Optional[str] = Field(None, description="Region/State (optional for ad-hoc location)")
+    
+    total_quantity: Decimal = Field(..., gt=0, description="Total quantity available (REQUIRED)")
+    quality_params: Dict[str, Any] = Field(
+        ..., 
+        description="Quality parameters - MANDATORY (validated against commodity parameters)"
+    )
+    
+    # ========== AUTO-POPULATED (DO NOT SEND FROM CLIENT) ==========
+    quantity_unit: Optional[str] = Field(
+        None, 
+        description="AUTO: Populated from commodity.trade_unit (BALE, CANDY, MT, QTL, KG). DO NOT send from client."
+    )
+    price_unit: Optional[str] = Field(
+        None, 
+        description="AUTO: Populated from commodity.rate_unit (per CANDY, per KG). DO NOT send from client."
+    )
+    
+    # ========== OPTIONAL FIELDS ==========
+    base_price: Optional[Decimal] = Field(None, gt=0, description="Base price (OPTIONAL - can be negotiable)")
     price_matrix: Optional[Dict[str, Any]] = Field(None, description="Price matrix JSONB (for MATRIX type)")
-    quality_params: Optional[Dict[str, Any]] = Field(None, description="Quality parameters")
+    test_report_url: Optional[str] = Field(None, description="URL to test report PDF/Image")
+    media_urls: Optional[Dict[str, List[str]]] = Field(
+        None, 
+        description="Photo/video URLs for AI: {'photos': [url1], 'videos': [url2]}"
+    )
     market_visibility: str = Field("PUBLIC", description="PUBLIC, PRIVATE, RESTRICTED, INTERNAL")
     allow_partial_order: bool = Field(True, description="Allow partial fills")
     min_order_quantity: Optional[Decimal] = Field(None, gt=0, description="Minimum order quantity")
@@ -55,18 +103,73 @@ class AvailabilityCreateRequest(BaseModel):
     notes: Optional[str] = None
     tags: Optional[List[str]] = None
     
+    @field_validator('quality_params')
+    @classmethod
+    def validate_quality_params_not_empty(cls, v):
+        """Ensure quality_params is not empty."""
+        if not v or len(v) == 0:
+            raise ValueError("quality_params cannot be empty - at least one parameter required")
+        return v
+    
+    @model_validator(mode='after')
+    def validate_location(self):
+        """Ensure EITHER location_id OR ad-hoc location is provided."""
+        has_location_id = self.location_id is not None
+        has_adhoc = all([
+            self.location_address,
+            self.location_latitude is not None,
+            self.location_longitude is not None
+        ])
+        
+        if not has_location_id and not has_adhoc:
+            raise ValueError(
+                "Must provide EITHER location_id (registered) OR ad-hoc location "
+                "(location_address + location_latitude + location_longitude)"
+            )
+        
+        if has_location_id and has_adhoc:
+            raise ValueError(
+                "Cannot provide BOTH location_id and ad-hoc location. Choose one."
+            )
+        
+        return self
+    
     class Config:
         json_schema_extra = {
-            "example": {
-                "commodity_id": "123e4567-e89b-12d3-a456-426614174000",
-                "location_id": "123e4567-e89b-12d3-a456-426614174001",
-                "total_quantity": 100.0,
-                "base_price": 70000.0,
-                "quality_params": {
-                    "length": 29.0,
-                    "strength": 26.0,
-                    "micronaire": 4.5
+            "examples": [
+                {
+                    "description": "Using REGISTERED location from settings table",
+                    "value": {
+                        "commodity_id": "123e4567-e89b-12d3-a456-426614174000",
+                        "location_id": "123e4567-e89b-12d3-a456-426614174001",
+                        "total_quantity": 100.0,
+                        "base_price": 8000.0,
+                        "quality_params": {
+                            "length": 29.0,
+                            "strength": 26.0,
+                            "micronaire": 4.5
+                        }
+                    }
                 },
+                {
+                    "description": "Using AD-HOC location with Google Maps coordinates",
+                    "value": {
+                        "commodity_id": "123e4567-e89b-12d3-a456-426614174000",
+                        "location_address": "Warehouse 5, GIDC Industrial Area, Surat, Gujarat",
+                        "location_latitude": 21.1702,
+                        "location_longitude": 72.8311,
+                        "location_pincode": "395008",
+                        "location_region": "Gujarat",
+                        "total_quantity": 100.0,
+                        "base_price": 8000.0,
+                        "quality_params": {
+                            "length": 29.0,
+                            "strength": 26.0,
+                            "micronaire": 4.5
+                        }
+                    }
+                }
+            ],
                 "market_visibility": "PUBLIC",
                 "allow_partial_order": True,
                 "min_order_quantity": 10.0,
@@ -80,8 +183,11 @@ class AvailabilityUpdateRequest(BaseModel):
     
     total_quantity: Optional[Decimal] = Field(None, gt=0)
     base_price: Optional[Decimal] = Field(None, gt=0)
+    # quantity_unit and price_unit are auto-populated from commodity master, cannot be updated
     price_matrix: Optional[Dict[str, Any]] = None
     quality_params: Optional[Dict[str, Any]] = None
+    test_report_url: Optional[str] = None
+    media_urls: Optional[Dict[str, List[str]]] = None
     market_visibility: Optional[str] = None
     allow_partial_order: Optional[bool] = None
     min_order_quantity: Optional[Decimal] = Field(None, gt=0)
@@ -94,7 +200,7 @@ class AvailabilityUpdateRequest(BaseModel):
     class Config:
         json_schema_extra = {
             "example": {
-                "base_price": 72000.0,
+                "base_price": 8200.0,
                 "market_visibility": "RESTRICTED"
             }
         }
@@ -246,12 +352,14 @@ class AvailabilityResponse(BaseModel):
     """Availability response with all details."""
     
     id: UUID
-    seller_id: UUID
+    seller_partner_id: UUID
     commodity_id: UUID
     location_id: UUID
     
     # Quantities
     total_quantity: Decimal
+    quantity_unit: str
+    quantity_in_base_unit: Optional[Decimal]
     available_quantity: Decimal
     reserved_quantity: Decimal
     sold_quantity: Decimal
@@ -261,12 +369,22 @@ class AvailabilityResponse(BaseModel):
     # Pricing
     price_type: str
     base_price: Optional[Decimal]
+    price_unit: Optional[str]
+    price_per_base_unit: Optional[Decimal]
     price_matrix: Optional[Dict[str, Any]]
     currency: str
-    price_uom: Optional[str]
+    price_uom: Optional[str]  # DEPRECATED: Use price_unit
     
     # Quality
     quality_params: Optional[Dict[str, Any]]
+    
+    # Test Report & Media (AI-ready)
+    test_report_url: Optional[str]
+    test_report_verified: bool
+    test_report_data: Optional[Dict[str, Any]]
+    media_urls: Optional[Dict[str, List[str]]]
+    ai_detected_params: Optional[Dict[str, Any]]
+    manual_override_params: bool
     
     # AI Fields
     ai_score_vector: Optional[Dict[str, Any]]
@@ -318,18 +436,26 @@ class AvailabilityResponse(BaseModel):
         json_schema_extra = {
             "example": {
                 "id": "123e4567-e89b-12d3-a456-426614174003",
-                "seller_id": "123e4567-e89b-12d3-a456-426614174004",
+                "seller_partner_id": "123e4567-e89b-12d3-a456-426614174004",
                 "commodity_id": "123e4567-e89b-12d3-a456-426614174000",
                 "location_id": "123e4567-e89b-12d3-a456-426614174001",
                 "total_quantity": 100.0,
+                "quantity_unit": "CANDY",
+                "quantity_in_base_unit": 35562.22,
                 "available_quantity": 100.0,
                 "reserved_quantity": 0.0,
                 "sold_quantity": 0.0,
                 "allow_partial_order": True,
                 "price_type": "FIXED",
-                "base_price": 70000.0,
+                "base_price": 8000.0,
+                "price_unit": "per CANDY",
+                "price_per_base_unit": 22.50,
                 "currency": "INR",
                 "quality_params": {"length": 29.0, "strength": 26.0},
+                "test_report_url": "https://storage.example.com/test-reports/abc123.pdf",
+                "test_report_verified": False,
+                "media_urls": {"photos": ["https://storage.example.com/photos/cotton1.jpg"], "videos": []},
+                "manual_override_params": False,
                 "ai_price_anomaly_flag": False,
                 "market_visibility": "PUBLIC",
                 "status": "ACTIVE",
