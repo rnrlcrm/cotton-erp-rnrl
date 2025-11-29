@@ -531,12 +531,15 @@ class RiskScoringService:
             approval_route = "director_with_checks"
         
         return RiskAssessment(
-            risk_score=score,
-            risk_category=category,
-            approval_route=approval_route,
-            factors=factors,
-            recommended_credit_limit=self._calculate_credit_limit(score, gst_turnover),
-            assessment_date=datetime.utcnow()
+            total_score=score,
+            category=category,
+            business_age_score=scores["business_age"],
+            entity_type_score=scores["entity_type"],
+            tax_compliance_score=scores["tax_compliance"],
+            documentation_score=scores.get("documentation", 0),
+            verification_score=scores.get("verification", 0),
+            flags=factors,
+            recommendation=f"{category.value} risk - {approval_route}"
         )
     
     def _calculate_credit_limit(
@@ -631,7 +634,7 @@ class ApprovalService:
                 primary_contact_person=application.primary_contact_person,
                 primary_contact_email=application.primary_contact_email,
                 primary_contact_phone=application.primary_contact_phone,
-                risk_score=risk_assessment.risk_score,
+                risk_score=risk_assessment.total_score,
                 risk_category=risk_assessment.risk_category,
                 risk_assessment={"factors": risk_assessment.factors},
                 credit_limit=risk_assessment.recommended_credit_limit,
@@ -972,7 +975,7 @@ class PartnerService:
         # Update application with risk score
         await self.app_repo.update(
             application_id,
-            risk_score=risk_assessment.risk_score,
+            risk_score=risk_assessment.total_score,
             risk_category=risk_assessment.risk_category,
             status="pending_approval",
             submitted_at=datetime.utcnow()

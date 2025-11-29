@@ -468,12 +468,12 @@ class TestPartnerCRUD:
         await repo.update(
             partner.id,
             trade_name="Updated Trade Name",
-            contact_email="updated@email.com"
+            primary_contact_email="updated@email.com"
         )
 
         updated = await repo.get_by_id(partner.id)
         assert updated.trade_name == "Updated Trade Name"
-        assert updated.contact_email == "updated@email.com"
+        assert updated.primary_contact_email == "updated@email.com"
 
     @pytest.mark.asyncio
     async def test_search_partners_by_name(self, db_session: AsyncSession, seed_organization):
@@ -625,8 +625,8 @@ class TestPartnerAmendments:
             amendment_type=AmendmentType.UPDATE_CONTACT,
             requested_by=user_id,
             requested_at=datetime.utcnow(),
-            current_values={"contact_email": "old@email.com"},
-            requested_values={"contact_email": "new@email.com"},
+            current_values={"primary_contact_email": "old@email.com"},
+            requested_values={"primary_contact_email": "new@email.com"},
             reason="Email changed",
             status="pending",
         )
@@ -642,11 +642,11 @@ class TestPartnerAmendments:
         amendment.applied_at = datetime.utcnow()
         
         # Apply changes to partner
-        partner.contact_email = "new@email.com"
+        partner.primary_contact_email = "new@email.com"
         
         await db_session.flush()
 
-        assert partner.contact_email == "new@email.com"
+        assert partner.primary_contact_email == "new@email.com"
         assert amendment.status == "approved"
         assert amendment.applied is True
 
@@ -919,7 +919,7 @@ class TestPartnerVehicles:
         # Add vehicle
         vehicle = PartnerVehicle(
             partner_id=partner.id,
-            registration_number="MH12AB1234",
+            vehicle_number="MH12AB1234",
             vehicle_type="Truck",
             owner_name="Transport Company",
             maker_model="Tata 407",
@@ -934,7 +934,7 @@ class TestPartnerVehicles:
         db_session.add(vehicle)
         await db_session.flush()
 
-        assert vehicle.registration_number == "MH12AB1234"
+        assert vehicle.vehicle_number == "MH12AB1234"
         assert vehicle.capacity_tons == Decimal("7.5")
         assert vehicle.verified_via_rto is True
 
@@ -970,7 +970,7 @@ class TestPartnerVehicles:
         vehicles = [
             PartnerVehicle(
                 partner_id=partner.id,
-                registration_number=f"MH12XY{1000+i}",
+                vehicle_number=f"MH12XY{1000+i}",
                 vehicle_type="Truck",
                 capacity_tons=Decimal("10.0"),
                 verified_via_rto=True,
