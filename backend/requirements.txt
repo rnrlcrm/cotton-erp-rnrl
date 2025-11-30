@@ -63,14 +63,14 @@ aiohttp==3.9.1
 
 # Testing
 pytest==7.4.4
-pytest-asyncio==0.23.3
+pytest-asyncio==0.26.0
 pytest-cov==4.1.0
 faker==22.0.0
 
 # Code Quality
 black==23.12.1
-flake8==7.0.0
-mypy==1.8.0
+flake8==7.3.0
+mypy==1.19.0
 isort==5.13.2
 
 # Monitoring & Logging
