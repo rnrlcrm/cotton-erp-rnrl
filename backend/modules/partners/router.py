@@ -297,11 +297,9 @@ async def approve_partner(
     _check: None = Depends(RequireCapability(Capabilities.PARTNER_APPROVE)),
 ):
     """Approve partner application (manager/director only)"""
-    # TODO: Check user has manager/director role
-    
     approval_service = partner_services.ApprovalService(db, user_id)
     
-    # Get application to fetch risk assessment
+    # Get application
     app_repo = OnboardingApplicationRepository(db)
     application = await app_repo.get_by_id(application_id)
     
@@ -311,9 +309,7 @@ async def approve_partner(
             detail="Application not found"
         )
     
-    # Create risk assessment from application
-    from backend.modules.partners.schemas import RiskAssessment
-    
+    # Build risk assessment from application
     risk_assessment = RiskAssessment(
         risk_score=application.risk_score or 50,
         risk_category=application.risk_category,
@@ -323,12 +319,13 @@ async def approve_partner(
     )
     
     try:
+        # Service handles: business logic, event emission, commit, idempotency
         partner = await approval_service.process_approval(
             application_id,
             risk_assessment,
-            decision
+            decision,
+            idempotency_key=idempotency_key
         )
-        await db.commit()
         return partner
     except ValueError as e:
         raise HTTPException(
@@ -358,7 +355,6 @@ async def reject_partner(
     _check: None = Depends(RequireCapability(Capabilities.PARTNER_APPROVE)),
 ):
     """Reject partner application"""
-    # Set approved=False
     decision.approved = False
     
     approval_service = partner_services.ApprovalService(db, user_id)
@@ -371,8 +367,6 @@ async def reject_partner(
             detail="Application not found"
         )
     
-    from backend.modules.partners.schemas import RiskAssessment
-    
     risk_assessment = RiskAssessment(
         risk_score=application.risk_score or 0,
         risk_category=application.risk_category,
@@ -381,8 +375,16 @@ async def reject_partner(
     )
     
     try:
+        # Service handles: business logic, event emission, commit, idempotency
         await approval_service.process_approval(
             application_id,
+            risk_assessment,
+            decision,
+            idempotency_key=idempotency_key
+        )
+    except ValueError as e:
+        # Rejection raises ValueError with message
+        return {"message": str(e), "status": "rejected"}
             risk_assessment,
             decision
         )

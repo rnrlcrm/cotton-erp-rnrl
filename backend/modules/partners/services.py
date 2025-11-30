@@ -16,15 +16,18 @@ Services:
 
 from __future__ import annotations
 
+import json
 from datetime import datetime, timedelta
 from decimal import Decimal
 from typing import Dict, List, Optional
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
+import redis.asyncio as redis
 
 from backend.core.events.emitter import EventEmitter
 from backend.core.resilience.circuit_breaker import api_circuit_breaker
+from backend.core.outbox import OutboxRepository
 from backend.modules.partners.enums import (
     AmendmentType,
     BusinessEntityType,
@@ -611,17 +614,20 @@ class ApprovalService:
     Auto-approve low risk, route to manager/director for higher risk.
     """
     
-    def __init__(self, db: AsyncSession, current_user_id: UUID):
+    def __init__(self, db: AsyncSession, current_user_id: UUID, redis_client: Optional[redis.Redis] = None):
         self.db = db
         self.current_user_id = current_user_id
+        self.redis = redis_client
         self.bp_repo = BusinessPartnerRepository(db)
         self.app_repo = OnboardingApplicationRepository(db)
+        self.outbox_repo = OutboxRepository(db)
     
     async def process_approval(
         self,
         application_id: UUID,
         risk_assessment: RiskAssessment,
-        decision: ApprovalDecision
+        decision: ApprovalDecision,
+        idempotency_key: Optional[str] = None
     ) -> BusinessPartner:
         """
         Process approval decision.
@@ -630,10 +636,17 @@ class ApprovalService:
             application_id: Application ID
             risk_assessment: Risk assessment result
             decision: Approval decision
+            idempotency_key: Idempotency key for deduplication
         
         Returns:
             Approved BusinessPartner
         """
+        # Check idempotency
+        if idempotency_key and self.redis:
+            cached = await self.redis.get(f"idempotency:{idempotency_key}")
+            if cached:
+                return json.loads(cached)
+        
         # Get application
         application = await self.app_repo.get_by_id(application_id)
         if not application:
@@ -691,6 +704,40 @@ class ApprovalService:
                 approved_by=self.current_user_id
             )
             
+            # Emit event through outbox (transactional)
+            await self.outbox_repo.add_event(
+                aggregate_id=partner.id,
+                aggregate_type="Partner",
+                event_type="PartnerApproved",
+                payload={
+                    "partner_id": str(partner.id),
+                    "partner_type": partner.partner_type,
+                    "legal_name": partner.legal_name,
+                    "credit_limit": float(partner.credit_limit),
+                    "approved_by": str(self.current_user_id),
+                    "approved_at": partner.approved_at.isoformat()
+                },
+                topic_name="partner-events",
+                metadata={"user_id": str(self.current_user_id)},
+                idempotency_key=idempotency_key
+            )
+            
+            # Commit transaction
+            await self.db.commit()
+            
+            # Cache result for idempotency
+            if idempotency_key and self.redis:
+                partner_dict = {
+                    "id": str(partner.id),
+                    "legal_name": partner.legal_name,
+                    "status": partner.status
+                }
+                await self.redis.setex(
+                    f"idempotency:{idempotency_key}",
+                    86400,
+                    json.dumps(partner_dict)
+                )
+            
             return partner
         elif decision.decision == "reject":
             # Rejection
@@ -701,6 +748,24 @@ class ApprovalService:
                 rejected_by=self.current_user_id,
                 rejection_reason=decision.notes
             )
+            
+            # Emit rejection event
+            await self.outbox_repo.add_event(
+                aggregate_id=application_id,
+                aggregate_type="PartnerApplication",
+                event_type="PartnerApplicationRejected",
+                payload={
+                    "application_id": str(application_id),
+                    "reason": decision.notes,
+                    "rejected_by": str(self.current_user_id),
+                    "rejected_at": datetime.utcnow().isoformat()
+                },
+                topic_name="partner-events",
+                metadata={"user_id": str(self.current_user_id)},
+                idempotency_key=idempotency_key
+            )
+            
+            await self.db.commit()
             
             raise ValueError(f"Application rejected: {decision.notes}")
         else:
