@@ -18,6 +18,8 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend.core.auth.capabilities.decorators import RequireCapability
+from backend.core.auth.capabilities.definitions import Capabilities
 from backend.core.auth.dependencies import get_current_user, require_permissions
 from backend.db.async_session import get_db
 from backend.modules.trade_desk.schemas.requirement_schemas import (
@@ -209,16 +211,17 @@ async def get_requirement(
     "/{requirement_id}",
     response_model=RequirementResponse,
     summary="Update requirement",
-    description="Update requirement with AI re-processing and micro-events"
+    description="Update requirement with AI re-processing and micro-events. Requires REQUIREMENT_UPDATE capability."
 )
 async def update_requirement(
     requirement_id: UUID,
     request: RequirementUpdateRequest,
     current_user=Depends(get_current_user),
-    service: RequirementService = Depends(get_requirement_service)
+    service: RequirementService = Depends(get_requirement_service),
+    _check: None = Depends(RequireCapability(Capabilities.REQUIREMENT_UPDATE))
 ):
     """
-    Update requirement with AI re-processing.
+    Update requirement with AI re-processing. Requires REQUIREMENT_UPDATE capability.
     
     Emits micro-events:
     - budget_changed
@@ -271,15 +274,16 @@ async def update_requirement(
     "/{requirement_id}/publish",
     response_model=RequirementResponse,
     summary="Publish requirement",
-    description="Publish requirement (DRAFT → ACTIVE) with intent-based routing"
+    description="Publish requirement (DRAFT → ACTIVE) with intent-based routing. Requires REQUIREMENT_UPDATE capability."
 )
 async def publish_requirement(
     requirement_id: UUID,
     current_user=Depends(get_current_user),
-    service: RequirementService = Depends(get_requirement_service)
+    service: RequirementService = Depends(get_requirement_service),
+    _check: None = Depends(RequireCapability(Capabilities.REQUIREMENT_UPDATE))
 ):
     """
-    Publish requirement (DRAFT → ACTIVE).
+    Publish requirement (DRAFT → ACTIVE). Requires REQUIREMENT_UPDATE capability.
     
     Triggers:
     - requirement.published event
@@ -327,15 +331,16 @@ async def publish_requirement(
     "/{requirement_id}/cancel",
     response_model=RequirementResponse,
     summary="Cancel requirement",
-    description="Cancel requirement with reason"
+    description="Cancel requirement with reason. Requires REQUIREMENT_CANCEL capability."
 )
 async def cancel_requirement(
     requirement_id: UUID,
     request: CancelRequirementRequest,
     current_user=Depends(get_current_user),
-    service: RequirementService = Depends(get_requirement_service)
+    service: RequirementService = Depends(get_requirement_service),
+    _check: None = Depends(RequireCapability(Capabilities.REQUIREMENT_CANCEL))
 ):
-    """Cancel requirement."""
+    """Cancel requirement. Requires REQUIREMENT_CANCEL capability."""
     buyer_id = get_buyer_id_from_user(current_user)
     # Service with WebSocket support injected via dependency
     
@@ -379,15 +384,16 @@ async def cancel_requirement(
     "/{requirement_id}/fulfillment",
     response_model=RequirementResponse,
     summary="Update fulfillment",
-    description="Update when buyer purchases from availability"
+    description="Update when buyer purchases from availability. Requires REQUIREMENT_FULFILL capability."
 )
 async def update_fulfillment(
     requirement_id: UUID,
     request: FulfillmentUpdateRequest,
     current_user=Depends(get_current_user),
-    service: RequirementService = Depends(get_requirement_service)
+    service: RequirementService = Depends(get_requirement_service),
+    _check: None = Depends(RequireCapability(Capabilities.REQUIREMENT_FULFILL))
 ):
-    """Update fulfillment tracking."""
+    """Update fulfillment tracking. Requires REQUIREMENT_FULFILL capability."""
     buyer_id = get_buyer_id_from_user(current_user)
     # Service with WebSocket support injected via dependency
     
@@ -582,16 +588,17 @@ async def get_demand_statistics(
     "/{requirement_id}/ai-adjust",
     response_model=AIAdjustmentResponse,
     summary="🚀 Apply AI-suggested adjustment",
-    description="ENHANCEMENT #7: Apply AI adjustment with full explainability and audit trail"
+    description="ENHANCEMENT #7: Apply AI adjustment with full explainability and audit trail. Requires REQUIREMENT_AI_ADJUST capability."
 )
 async def apply_ai_adjustment(
     requirement_id: UUID,
     request: AIAdjustmentRequest,
     current_user=Depends(get_current_user),
-    service: RequirementService = Depends(get_requirement_service)
+    service: RequirementService = Depends(get_requirement_service),
+    _check: None = Depends(RequireCapability(Capabilities.REQUIREMENT_AI_ADJUST))
 ):
     """
-    🚀 ENHANCEMENT #7: AI Adjustment with Explainability.
+    🚀 ENHANCEMENT #7: AI Adjustment with Explainability. Requires REQUIREMENT_AI_ADJUST capability.
     
     Apply AI-suggested adjustment to requirement with:
     - Full reasoning explanation
