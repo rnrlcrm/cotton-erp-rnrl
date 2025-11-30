@@ -27,12 +27,16 @@ Architecture:
 
 from __future__ import annotations
 
+import json
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Any, Dict, List, Optional, Tuple
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
+import redis.asyncio as redis
+
+from backend.core.outbox import OutboxRepository
 
 from backend.modules.trade_desk.enums import (
     ApprovalStatus,
@@ -62,15 +66,18 @@ class AvailabilityService:
     - Orchestration of repository operations
     """
     
-    def __init__(self, db: AsyncSession):
+    def __init__(self, db: AsyncSession, redis_client: Optional[redis.Redis] = None):
         """
         Initialize service.
         
         Args:
             db: Async SQLAlchemy session
+            redis_client: Redis client for idempotency
         """
         self.db = db
+        self.redis = redis_client
         self.repo = AvailabilityRepository(db)
+        self.outbox_repo = OutboxRepository(db)
     
     # ========================
     # Create & Update Operations
@@ -553,7 +560,8 @@ class AvailabilityService:
         self,
         availability_id: UUID,
         approved_by: UUID,
-        approval_notes: Optional[str] = None
+        approval_notes: Optional[str] = None,
+        idempotency_key: Optional[str] = None
     ) -> Optional[Availability]:
         """
         Approve availability (change status to ACTIVE).
@@ -562,10 +570,17 @@ class AvailabilityService:
             availability_id: Availability UUID
             approved_by: User UUID who approved it
             approval_notes: Optional approval notes
+            idempotency_key: Idempotency key for deduplication
         
         Returns:
             Approved availability or None if not found
         """
+        # Check idempotency
+        if idempotency_key and self.redis:
+            cached = await self.redis.get(f"idempotency:{idempotency_key}")
+            if cached:
+                return json.loads(cached)
+        
         availability = await self.repo.get_by_id(availability_id)
         if not availability:
             return None
@@ -578,9 +593,39 @@ class AvailabilityService:
         
         availability = await self.repo.update(availability)
         
-        # Emit created event (now visible to buyers)
-        availability.emit_created(approved_by)
-        await availability.flush_events(self.db)
+        # Emit event through outbox (transactional)
+        await self.outbox_repo.add_event(
+            aggregate_id=availability.id,
+            aggregate_type="Availability",
+            event_type="AvailabilityApproved",
+            payload={
+                "availability_id": str(availability.id),
+                "seller_id": str(availability.seller_id),
+                "commodity_id": str(availability.commodity_id),
+                "quantity": float(availability.total_quantity),
+                "approved_by": str(approved_by),
+                "approved_at": availability.approved_at.isoformat()
+            },
+            topic_name="availability-events",
+            metadata={"user_id": str(approved_by)},
+            idempotency_key=idempotency_key
+        )
+        
+        # Commit transaction
+        await self.db.commit()
+        
+        # Cache result for idempotency
+        if idempotency_key and self.redis:
+            result_dict = {
+                "id": str(availability.id),
+                "status": availability.status,
+                "approval_status": availability.approval_status
+            }
+            await self.redis.setex(
+                f"idempotency:{idempotency_key}",
+                86400,
+                json.dumps(result_dict)
+            )
         
         return availability
     

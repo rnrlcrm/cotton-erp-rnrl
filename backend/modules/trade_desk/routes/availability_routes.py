@@ -311,16 +311,19 @@ async def approve_availability(
     request: ApprovalRequest,
     current_user=Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
+    idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key"),
     _check: None = Depends(RequireCapability(Capabilities.AVAILABILITY_APPROVE))
 ):
     """Approve availability for public listing (CRITICAL). Requires AVAILABILITY_APPROVE capability.""""
     service = AvailabilityService(db)
     
     try:
+        # Service handles: event emission, commit, idempotency
         availability = await service.approve_availability(
             availability_id=availability_id,
             approved_by=current_user.id,
-            notes=request.notes
+            approval_notes=request.notes,
+            idempotency_key=idempotency_key
         )
         
         return AvailabilityResponse.from_orm(availability)
