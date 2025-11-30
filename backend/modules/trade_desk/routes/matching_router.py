@@ -19,12 +19,13 @@ from typing import List, Optional
 from uuid import UUID
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, status, Query, Header
 from sqlalchemy.ext.asyncio import AsyncSession
 from pydantic import BaseModel, Field
 
 from backend.core.database import get_db
 from backend.core.auth import get_current_user
+from backend.core.capabilities import Capabilities, RequireCapability
 from backend.modules.trade_desk.models.requirement import Requirement
 from backend.modules.trade_desk.models.availability import Availability
 from backend.modules.trade_desk.matching.matching_engine import MatchingEngine, MatchResult
@@ -151,10 +152,12 @@ async def find_matches_for_requirement(
     min_score: Optional[float] = Query(default=None, ge=0, le=1, description="Override min score threshold"),
     current_user = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
-    matching_engine: MatchingEngine = Depends(get_matching_engine)
+    matching_engine: MatchingEngine = Depends(get_matching_engine),
+    idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key"),
+    _check: None = Depends(RequireCapability(Capabilities.MATCHING_MANUAL))
 ) -> FindMatchesResponse:
     """
-    Find matches for a buyer requirement
+    Find matches for a buyer requirement. Requires MATCHING_MANUAL capability.
     
     Security: User must own the requirement
     """
@@ -246,10 +249,12 @@ async def find_matches_for_availability(
     min_score: Optional[float] = Query(default=None, ge=0, le=1, description="Override min score threshold"),
     current_user = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
-    matching_engine: MatchingEngine = Depends(get_matching_engine)
+    matching_engine: MatchingEngine = Depends(get_matching_engine),
+    idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key"),
+    _check: None = Depends(RequireCapability(Capabilities.MATCHING_MANUAL))
 ) -> FindMatchesResponse:
     """
-    Find matches for a seller availability
+    Find matches for a seller availability. Requires MATCHING_MANUAL capability.
     
     Security: User must own the availability
     """

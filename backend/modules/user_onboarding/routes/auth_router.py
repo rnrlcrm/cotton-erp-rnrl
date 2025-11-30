@@ -8,13 +8,14 @@ Endpoints:
 - GET /auth/me - Get current user details
 """
 
-from typing import AsyncGenerator
+from typing import AsyncGenerator, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status, Header
 from sqlalchemy.ext.asyncio import AsyncSession
 import redis.asyncio as redis
 
 from backend.core.auth.deps import get_current_user
+from backend.core.capabilities import Capabilities, RequireCapability
 from backend.db import get_db
 from backend.modules.user_onboarding.schemas.auth_schemas import (
     AuthTokenResponse,
@@ -81,9 +82,11 @@ async def get_redis() -> AsyncGenerator[redis.Redis, None]:
 )
 async def send_otp(
     request: SendOTPRequest,
-    redis_client: redis.Redis = Depends(get_redis)
+    redis_client: redis.Redis = Depends(get_redis),
+    idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key"),
+    _check: None = Depends(RequireCapability(Capabilities.PUBLIC_ACCESS))
 ):
-    """Send OTP to mobile number"""
+    """Send OTP to mobile number. Requires PUBLIC_ACCESS capability (unauthenticated endpoint)."""
     # Handle mobile number formatting
     mobile = request.mobile_number.strip()
     if not mobile.startswith("+"):
@@ -143,9 +146,11 @@ async def verify_otp(
     http_request: Request,  # Renamed to avoid conflict
     request: VerifyOTPRequest,
     redis_client: redis.Redis = Depends(get_redis),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key"),
+    _check: None = Depends(RequireCapability(Capabilities.PUBLIC_ACCESS))
 ):
-    """Verify OTP and return JWT token with session"""
+    """Verify OTP and return JWT token with session. Requires PUBLIC_ACCESS capability (unauthenticated endpoint)."""
     otp_service = OTPService(redis_client)
     user_service = UserAuthService(db)
     
@@ -235,9 +240,11 @@ async def verify_otp(
 async def complete_profile(
     request: CompleteProfileRequest,
     db: AsyncSession = Depends(get_db),
-    current_user = Depends(get_current_user)
+    current_user = Depends(get_current_user),
+    idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key"),
+    _check: None = Depends(RequireCapability(Capabilities.AUTH_UPDATE_PROFILE))
 ):
-    """Complete user profile after OTP verification"""
+    """Complete user profile after OTP verification. Requires AUTH_UPDATE_PROFILE capability."""
     user_service = UserAuthService(db)
     
     user = await user_service.complete_profile(

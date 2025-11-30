@@ -1,9 +1,11 @@
-from typing import List
+from typing import List, Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Header, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend.core.auth.capabilities.decorators import RequireCapability
+from backend.core.auth.capabilities.definitions import Capabilities
 from backend.db.session import get_db
 from backend.modules.settings.organization.schemas import (
     NextDocumentNumberResponse,
@@ -48,8 +50,10 @@ async def get_service(
 def create_organization(
     data: OrganizationCreate,
     service: OrganizationService = Depends(get_service),
+    idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key"),
+    _check: None = Depends(RequireCapability(Capabilities.ORG_CREATE))
 ) -> OrganizationResponse:
-    """Create a new organization."""
+    """Create a new organization. Requires ORG_CREATE capability. Supports idempotency."""
     return service.create_organization(data)
 
 
@@ -77,8 +81,10 @@ def update_organization(
     org_id: UUID,
     data: OrganizationUpdate,
     service: OrganizationService = Depends(get_service),
+    idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key"),
+    _check: None = Depends(RequireCapability(Capabilities.ORG_UPDATE))
 ) -> OrganizationResponse:
-    """Update organization."""
+    """Update organization. Requires ORG_UPDATE capability. Supports idempotency."""
     return service.update_organization(org_id, data)
 
 
@@ -86,8 +92,10 @@ def update_organization(
 def delete_organization(
     org_id: UUID,
     service: OrganizationService = Depends(get_service),
+    idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key"),
+    _check: None = Depends(RequireCapability(Capabilities.ORG_DELETE))
 ) -> None:
-    """Delete organization."""
+    """Delete organization. Requires ORG_DELETE capability. Supports idempotency."""
     service.delete_organization(org_id)
 
 
@@ -96,8 +104,10 @@ def delete_organization(
 def create_gst(
     data: OrganizationGSTCreate,
     service: OrganizationService = Depends(get_service),
+    idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key"),
+    _check: None = Depends(RequireCapability(Capabilities.ORG_UPDATE))
 ) -> OrganizationGSTResponse:
-    """Create GST record."""
+    """Create GST record. Requires ORG_UPDATE capability. Supports idempotency."""
     return service.create_gst(data)
 
 
@@ -124,8 +134,10 @@ def update_gst(
     gst_id: UUID,
     data: OrganizationGSTUpdate,
     service: OrganizationService = Depends(get_service),
+    idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key"),
+    _check: None = Depends(RequireCapability(Capabilities.ORG_UPDATE))
 ) -> OrganizationGSTResponse:
-    """Update GST record."""
+    """Update GST record. Requires ORG_UPDATE capability. Supports idempotency."""
     return service.update_gst(gst_id, data)
 
 
@@ -133,8 +145,10 @@ def update_gst(
 def delete_gst(
     gst_id: UUID,
     service: OrganizationService = Depends(get_service),
+    idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key"),
+    _check: None = Depends(RequireCapability(Capabilities.ORG_DELETE))
 ) -> None:
-    """Delete GST record."""
+    """Delete GST record. Requires ORG_DELETE capability. Supports idempotency."""
     service.delete_gst(gst_id)
 
 
@@ -143,8 +157,10 @@ def delete_gst(
 def create_bank_account(
     data: OrganizationBankAccountCreate,
     service: OrganizationService = Depends(get_service),
+    idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key"),
+    _check: None = Depends(RequireCapability(Capabilities.ORG_UPDATE))
 ) -> OrganizationBankAccountResponse:
-    """Create bank account."""
+    """Create bank account (FINANCIAL DATA). Requires ORG_UPDATE capability. Supports idempotency."""
     return service.create_bank_account(data)
 
 
@@ -171,8 +187,10 @@ def update_bank_account(
     account_id: UUID,
     data: OrganizationBankAccountUpdate,
     service: OrganizationService = Depends(get_service),
+    idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key"),
+    _check: None = Depends(RequireCapability(Capabilities.ORG_UPDATE))
 ) -> OrganizationBankAccountResponse:
-    """Update bank account."""
+    """Update bank account (FINANCIAL DATA). Requires ORG_UPDATE capability. Supports idempotency."""
     return service.update_bank_account(account_id, data)
 
 
@@ -180,8 +198,10 @@ def update_bank_account(
 def delete_bank_account(
     account_id: UUID,
     service: OrganizationService = Depends(get_service),
+    idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key"),
+    _check: None = Depends(RequireCapability(Capabilities.ORG_DELETE))
 ) -> None:
-    """Delete bank account."""
+    """Delete bank account (FINANCIAL DATA). Requires ORG_DELETE capability. Supports idempotency."""
     service.delete_bank_account(account_id)
 
 
@@ -190,8 +210,10 @@ def delete_bank_account(
 def create_financial_year(
     data: OrganizationFinancialYearCreate,
     service: OrganizationService = Depends(get_service),
+    idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key"),
+    _check: None = Depends(RequireCapability(Capabilities.ORG_UPDATE))
 ) -> OrganizationFinancialYearResponse:
-    """Create financial year."""
+    """Create financial year. Requires ORG_UPDATE capability. Supports idempotency."""
     return service.create_financial_year(data)
 
 
@@ -218,8 +240,10 @@ def update_financial_year(
     fy_id: UUID,
     data: OrganizationFinancialYearUpdate,
     service: OrganizationService = Depends(get_service),
+    idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key"),
+    _check: None = Depends(RequireCapability(Capabilities.ORG_UPDATE))
 ) -> OrganizationFinancialYearResponse:
-    """Update financial year (with optimistic locking)."""
+    """Update financial year (with optimistic locking). Requires ORG_UPDATE capability. Supports idempotency."""
     return service.update_financial_year(fy_id, data)
 
 
@@ -227,8 +251,10 @@ def update_financial_year(
 def delete_financial_year(
     fy_id: UUID,
     service: OrganizationService = Depends(get_service),
+    idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key"),
+    _check: None = Depends(RequireCapability(Capabilities.ORG_DELETE))
 ) -> None:
-    """Delete financial year."""
+    """Delete financial year. Requires ORG_DELETE capability. Supports idempotency."""
     service.delete_financial_year(fy_id)
 
 
@@ -237,8 +263,10 @@ def delete_financial_year(
 def create_document_series(
     data: OrganizationDocumentSeriesCreate,
     service: OrganizationService = Depends(get_service),
+    idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key"),
+    _check: None = Depends(RequireCapability(Capabilities.ORG_UPDATE))
 ) -> OrganizationDocumentSeriesResponse:
-    """Create document series."""
+    """Create document series. Requires ORG_UPDATE capability. Supports idempotency."""
     return service.create_document_series(data)
 
 
@@ -265,8 +293,10 @@ def update_document_series(
     series_id: UUID,
     data: OrganizationDocumentSeriesUpdate,
     service: OrganizationService = Depends(get_service),
+    idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key"),
+    _check: None = Depends(RequireCapability(Capabilities.ORG_UPDATE))
 ) -> OrganizationDocumentSeriesResponse:
-    """Update document series."""
+    """Update document series. Requires ORG_UPDATE capability. Supports idempotency."""
     return service.update_document_series(series_id, data)
 
 
@@ -274,8 +304,10 @@ def update_document_series(
 def delete_document_series(
     series_id: UUID,
     service: OrganizationService = Depends(get_service),
+    idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key"),
+    _check: None = Depends(RequireCapability(Capabilities.ORG_DELETE))
 ) -> None:
-    """Delete document series."""
+    """Delete document series. Requires ORG_DELETE capability. Supports idempotency."""
     service.delete_document_series(series_id)
 
 
@@ -285,6 +317,8 @@ def get_next_document_number(
     org_id: UUID,
     doc_type: str,
     service: OrganizationService = Depends(get_service),
+    idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key"),
+    _check: None = Depends(RequireCapability(Capabilities.ORG_UPDATE))
 ) -> NextDocumentNumberResponse:
-    """Get next document number for a document type (atomically increments)."""
+    """Get next document number for a document type (atomically increments). Requires ORG_UPDATE capability. Supports idempotency."""
     return service.get_next_document_number(org_id, doc_type)

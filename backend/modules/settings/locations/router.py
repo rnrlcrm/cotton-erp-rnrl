@@ -6,12 +6,14 @@ API endpoints for location management.
 
 from __future__ import annotations
 
-from typing import List
+from typing import List, Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, Header, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend.core.auth.capabilities.decorators import RequireCapability
+from backend.core.auth.capabilities.definitions import Capabilities
 from backend.core.events.emitter import EventEmitter
 from backend.db.session import get_db
 from backend.modules.settings.locations.schemas import (
@@ -48,10 +50,12 @@ async def get_location_service(
 @router.post("/search-google", response_model=List[GooglePlaceSuggestion])
 def search_google_places(
     request: LocationSearchRequest,
-    service: LocationService = Depends(get_location_service)
+    service: LocationService = Depends(get_location_service),
+    idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key"),
+    _check: None = Depends(RequireCapability(Capabilities.LOCATION_CREATE))
 ) -> List[GooglePlaceSuggestion]:
     """
-    Search for places using Google Maps Autocomplete API.
+    Search for places using Google Maps Autocomplete API. Requires LOCATION_CREATE capability. Supports idempotency.
     
     - **query**: Search string (min 2 characters)
     
@@ -63,10 +67,12 @@ def search_google_places(
 @router.post("/fetch-details", response_model=GooglePlaceDetails)
 def fetch_place_details(
     request: FetchDetailsRequest,
-    service: LocationService = Depends(get_location_service)
+    service: LocationService = Depends(get_location_service),
+    idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key"),
+    _check: None = Depends(RequireCapability(Capabilities.LOCATION_CREATE))
 ) -> GooglePlaceDetails:
     """
-    Fetch full location details from Google Place Details API.
+    Fetch full location details from Google Place Details API. Requires LOCATION_CREATE capability. Supports idempotency.
     
     - **place_id**: Google Place ID from autocomplete
     
@@ -81,10 +87,12 @@ def fetch_place_details(
 def create_location(
     data: LocationCreate,
     service: LocationService = Depends(get_location_service),
+    idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key"),
+    _check: None = Depends(RequireCapability(Capabilities.LOCATION_CREATE))
     # current_user_id: UUID = Depends(get_current_user)  # TODO: Uncomment when auth is ready
 ) -> LocationResponse:
     """
-    Create a new location or return existing if google_place_id already exists.
+    Create a new location or return existing if google_place_id already exists. Requires LOCATION_CREATE capability. Supports idempotency.
     
     This prevents duplicate locations in the system.
     
@@ -153,10 +161,12 @@ def update_location(
     location_id: UUID,
     data: LocationUpdate,
     service: LocationService = Depends(get_location_service),
+    idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key"),
+    _check: None = Depends(RequireCapability(Capabilities.LOCATION_UPDATE))
     # current_user_id: UUID = Depends(get_current_user)  # TODO: Uncomment when auth is ready
 ) -> LocationResponse:
     """
-    Update a location (only name and is_active can be updated).
+    Update a location (only name and is_active can be updated). Requires LOCATION_UPDATE capability. Supports idempotency.
     
     Google Maps data (address, lat/long, city, state, etc.) cannot be manually edited.
     
@@ -175,10 +185,12 @@ def update_location(
 def delete_location(
     location_id: UUID,
     service: LocationService = Depends(get_location_service),
+    idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key"),
+    _check: None = Depends(RequireCapability(Capabilities.LOCATION_DELETE))
     # current_user_id: UUID = Depends(get_current_user)  # TODO: Uncomment when auth is ready
 ) -> dict:
     """
-    Soft delete a location (sets is_active=False).
+    Soft delete a location (sets is_active=False). Requires LOCATION_DELETE capability. Supports idempotency.
     
     Cannot delete if location is referenced by other entities
     (organizations, trades, buyers, etc.)

@@ -23,10 +23,11 @@ from __future__ import annotations
 from typing import List, Optional, Dict, Any
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, status
+from fastapi import APIRouter, Depends, Header, HTTPException, UploadFile, File, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.core.auth.deps import get_current_user
+from backend.core.auth.capabilities import Capabilities, RequireCapability
 from backend.core.events.emitter import EventEmitter
 from backend.db.session import get_db
 from backend.modules.partners.enums import PartnerStatus, PartnerType, KYCStatus, RiskCategory
@@ -99,6 +100,11 @@ def get_event_emitter(db: AsyncSession = Depends(get_db)) -> EventEmitter:
     - Creates draft application
     
     Next step: Upload required documents
+    
+    **Infrastructure:**
+    - Idempotency via Idempotency-Key header
+    - Capability: PARTNER_CREATE
+    - Events emitted through transactional outbox
     """
 )
 async def start_onboarding(
@@ -106,7 +112,9 @@ async def start_onboarding(
     db: AsyncSession = Depends(get_db),
     event_emitter: EventEmitter = Depends(get_event_emitter),
     user_id: UUID = Depends(get_current_user_id),
-    organization_id: UUID = Depends(get_current_organization_id)
+    organization_id: UUID = Depends(get_current_organization_id),
+    idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key"),
+    _check: None = Depends(RequireCapability(Capabilities.PARTNER_CREATE)),
 ):
     """Start partner onboarding with GST verification and geocoding"""
     service = PartnerService(db, event_emitter, user_id, organization_id)
@@ -134,6 +142,11 @@ async def start_onboarding(
     - PAN Card: PAN number, name
     - Bank Proof: Account number, IFSC
     - Vehicle RC: Registration number, owner name
+    
+    **Infrastructure:**
+    - Idempotency via Idempotency-Key header
+    - Capability: PARTNER_CREATE
+    - Events emitted through transactional outbox
     """
 )
 async def upload_document(
@@ -142,7 +155,9 @@ async def upload_document(
     file: UploadFile = File(...),
     db: AsyncSession = Depends(get_db),
     user_id: UUID = Depends(get_current_user_id),
-    organization_id: UUID = Depends(get_current_organization_id)
+    organization_id: UUID = Depends(get_current_organization_id),
+    idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key"),
+    _check: None = Depends(RequireCapability(Capabilities.PARTNER_CREATE)),
 ):
     """Upload document and extract data using OCR"""
     # TODO: Upload file to storage (S3/GCS)
@@ -206,6 +221,11 @@ async def upload_document(
     - Low risk (>70): Auto-approved within 1 hour
     - Medium risk (40-70): Manager review, 24-48 hours
     - High risk (<40): Director review, 3-5 days
+    
+    **Infrastructure:**
+    - Idempotency via Idempotency-Key header
+    - Capability: PARTNER_CREATE
+    - Events emitted through transactional outbox
     """
 )
 async def submit_for_approval(
@@ -213,7 +233,9 @@ async def submit_for_approval(
     db: AsyncSession = Depends(get_db),
     event_emitter: EventEmitter = Depends(get_event_emitter),
     user_id: UUID = Depends(get_current_user_id),
-    organization_id: UUID = Depends(get_current_organization_id)
+    organization_id: UUID = Depends(get_current_organization_id),
+    idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key"),
+    _check: None = Depends(RequireCapability(Capabilities.PARTNER_CREATE)),
 ):
     """Submit application for approval with risk-based routing"""
     service = PartnerService(db, event_emitter, user_id, organization_id)
@@ -257,13 +279,22 @@ async def get_application_status(
     "/partners/{application_id}/approve",
     response_model=BusinessPartnerResponse,
     summary="Approve Partner Application",
-    description="Manager/Director approves partner application"
+    description="""
+    Manager/Director approves partner application.
+    
+    **Infrastructure:**
+    - Idempotency via Idempotency-Key header
+    - Capability: PARTNER_APPROVE (CRITICAL)
+    - Events emitted through transactional outbox
+    """
 )
 async def approve_partner(
     application_id: UUID,
     decision: ApprovalDecision,
     db: AsyncSession = Depends(get_db),
-    user_id: UUID = Depends(get_current_user_id)
+    user_id: UUID = Depends(get_current_user_id),
+    idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key"),
+    _check: None = Depends(RequireCapability(Capabilities.PARTNER_APPROVE)),
 ):
     """Approve partner application (manager/director only)"""
     # TODO: Check user has manager/director role
@@ -308,13 +339,23 @@ async def approve_partner(
 
 @router.post(
     "/partners/{application_id}/reject",
-    summary="Reject Partner Application"
+    summary="Reject Partner Application",
+    description="""
+    Reject partner application.
+    
+    **Infrastructure:**
+    - Idempotency via Idempotency-Key header
+    - Capability: PARTNER_APPROVE (CRITICAL)
+    - Events emitted through transactional outbox
+    """
 )
 async def reject_partner(
     application_id: UUID,
     decision: ApprovalDecision,
     db: AsyncSession = Depends(get_db),
-    user_id: UUID = Depends(get_current_user_id)
+    user_id: UUID = Depends(get_current_user_id),
+    idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key"),
+    _check: None = Depends(RequireCapability(Capabilities.PARTNER_APPROVE)),
 ):
     """Reject partner application"""
     # Set approved=False
@@ -427,13 +468,23 @@ async def get_partner_locations(
     "/{partner_id}/locations",
     response_model=PartnerLocationResponse,
     status_code=status.HTTP_201_CREATED,
-    summary="Add Location (Branch, Warehouse, Ship-To, etc.)"
+    summary="Add Location (Branch, Warehouse, Ship-To, etc.)",
+    description="""
+    Add a new location for a partner.
+    
+    **Infrastructure:**
+    - Idempotency via Idempotency-Key header
+    - Capability: PARTNER_UPDATE
+    - Events emitted through transactional outbox
+    """
 )
 async def add_partner_location(
     partner_id: UUID,
     location_data: PartnerLocationCreate,
     db: AsyncSession = Depends(get_db),
-    current_user = Depends(get_current_user)
+    current_user = Depends(get_current_user),
+    idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key"),
+    _check: None = Depends(RequireCapability(Capabilities.PARTNER_UPDATE)),
 ):
     """
     Add a new location for a partner
@@ -613,13 +664,22 @@ async def get_partner_vehicles(
 @router.post(
     "/{partner_id}/amendments",
     summary="Request Amendment",
-    description="Request to change partner details post-approval"
+    description="""
+    Request to change partner details post-approval.
+    
+    **Infrastructure:**
+    - Idempotency via Idempotency-Key header
+    - Capability: PARTNER_UPDATE
+    - Events emitted through transactional outbox
+    """
 )
 async def request_amendment(
     partner_id: UUID,
     amendment: AmendmentRequest,
     db: AsyncSession = Depends(get_db),
-    user_id: UUID = Depends(get_current_user_id)
+    user_id: UUID = Depends(get_current_user_id),
+    idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key"),
+    _check: None = Depends(RequireCapability(Capabilities.PARTNER_UPDATE)),
 ):
     """Request amendment to partner details"""
     # TODO: Implement amendment service
@@ -636,14 +696,23 @@ async def request_amendment(
     "/{partner_id}/employees",
     response_model=PartnerEmployeeResponse,
     summary="Invite Employee",
-    description="Add employee to partner account (unlimited - role/module based access)"
+    description="""
+    Add employee to partner account (unlimited - role/module based access).
+    
+    **Infrastructure:**
+    - Idempotency via Idempotency-Key header
+    - Capability: PARTNER_CREATE
+    - Events emitted through transactional outbox
+    """
 )
 async def invite_employee(
     partner_id: UUID,
     employee: EmployeeInvite,
     db: AsyncSession = Depends(get_db),
     user_id: UUID = Depends(get_current_user_id),
-    organization_id: UUID = Depends(get_current_organization_id)
+    organization_id: UUID = Depends(get_current_organization_id),
+    idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key"),
+    _check: None = Depends(RequireCapability(Capabilities.PARTNER_CREATE)),
 ):
     """Invite employee to partner account"""
     employee_repo = PartnerEmployeeRepository(db)
@@ -716,12 +785,21 @@ async def get_expiring_kyc_partners(
 @router.post(
     "/{partner_id}/kyc/renew",
     summary="Initiate KYC Renewal",
-    description="Start yearly KYC renewal process"
+    description="""
+    Start yearly KYC renewal process.
+    
+    **Infrastructure:**
+    - Idempotency via Idempotency-Key header
+    - Capability: PARTNER_UPDATE
+    - Events emitted through transactional outbox
+    """
 )
 async def initiate_kyc_renewal(
     partner_id: UUID,
     db: AsyncSession = Depends(get_db),
-    user_id: UUID = Depends(get_current_user_id)
+    user_id: UUID = Depends(get_current_user_id),
+    idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key"),
+    _check: None = Depends(RequireCapability(Capabilities.PARTNER_UPDATE)),
 ):
     """Initiate KYC renewal for partner"""
     kyc_service = partner_services.KYCRenewalService(db, user_id)
@@ -745,13 +823,23 @@ async def initiate_kyc_renewal(
 
 @router.post(
     "/{partner_id}/kyc/complete",
-    summary="Complete KYC Renewal"
+    summary="Complete KYC Renewal",
+    description="""
+    Complete KYC renewal with new documents.
+    
+    **Infrastructure:**
+    - Idempotency via Idempotency-Key header
+    - Capability: PARTNER_UPDATE
+    - Events emitted through transactional outbox
+    """
 )
 async def complete_kyc_renewal(
     partner_id: UUID,
     renewal: KYCRenewalRequest,
     db: AsyncSession = Depends(get_db),
-    user_id: UUID = Depends(get_current_user_id)
+    user_id: UUID = Depends(get_current_user_id),
+    idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key"),
+    _check: None = Depends(RequireCapability(Capabilities.PARTNER_UPDATE)),
 ):
     """Complete KYC renewal with new documents"""
     kyc_service = partner_services.KYCRenewalService(db, user_id)
@@ -783,14 +871,23 @@ async def complete_kyc_renewal(
     "/{partner_id}/vehicles",
     response_model=PartnerVehicleResponse,
     summary="Add Vehicle",
-    description="Add vehicle for transporter partner"
+    description="""
+    Add vehicle for transporter partner.
+    
+    **Infrastructure:**
+    - Idempotency via Idempotency-Key header
+    - Capability: PARTNER_UPDATE
+    - Events emitted through transactional outbox
+    """
 )
 async def add_vehicle(
     partner_id: UUID,
     vehicle: VehicleData,
     db: AsyncSession = Depends(get_db),
     user_id: UUID = Depends(get_current_user_id),
-    organization_id: UUID = Depends(get_current_organization_id)
+    organization_id: UUID = Depends(get_current_organization_id),
+    idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key"),
+    _check: None = Depends(RequireCapability(Capabilities.PARTNER_UPDATE)),
 ):
     """Add vehicle for transporter"""
     vehicle_repo = PartnerVehicleRepository(db)

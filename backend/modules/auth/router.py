@@ -14,11 +14,18 @@ Security:
 - Device fingerprinting
 - Suspicious login detection
 - Session expiry
+
+Infrastructure:
+- Idempotency support for all POST/PUT/PATCH/DELETE endpoints
+- Capability-based authorization
+- Event emission through transactional outbox pattern
 """
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from typing import Optional
+
+from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from uuid import UUID
 
@@ -32,6 +39,7 @@ from backend.modules.auth.schemas import (
 )
 from backend.core.jwt.session import SessionService
 from backend.core.auth.deps import get_current_user
+from backend.core.auth.capabilities import Capabilities, RequireCapability
 
 
 router = APIRouter(prefix="/auth", tags=["authentication"])
@@ -54,18 +62,25 @@ router = APIRouter(prefix="/auth", tags=["authentication"])
     - Checks if token is revoked
     - Updates session last active time
     - Detects suspicious activity
+    
+    **Infrastructure:**
+    - Idempotency support via Idempotency-Key header
+    - Capability check: AUTH_LOGIN (implicitly allowed for refresh)
     """
 )
 async def refresh_token(
     request: Request,
     body: RefreshTokenRequest,
-    db: AsyncSession = Depends(get_async_db)
+    db: AsyncSession = Depends(get_async_db),
+    idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key"),
 ):
     """
     Refresh access token.
     
     Use this endpoint when access token expires (every 15 minutes).
     You'll get a new access token AND a new refresh token.
+    
+    Idempotency: Include Idempotency-Key header to prevent duplicate token generation.
     """
     session_service = SessionService(db)
     
@@ -77,7 +92,8 @@ async def refresh_token(
         result = await session_service.refresh_session(
             refresh_token=body.refresh_token,
             user_agent=user_agent,
-            ip_address=ip_address
+            ip_address=ip_address,
+            idempotency_key=idempotency_key,
         )
         
         return TokenResponse(**result)
@@ -156,24 +172,33 @@ async def list_sessions(
     - Revokes access token
     - Marks session as inactive
     - Cannot be undone (must login again)
+    
+    **Infrastructure:**
+    - Idempotency support via Idempotency-Key header
+    - Capability check: AUTH_MANAGE_SESSIONS
+    - Events emitted through transactional outbox
     """
 )
 async def logout_device(
     session_id: UUID,
     current_user = Depends(get_current_user),
-    db: AsyncSession = Depends(get_async_db)
+    db: AsyncSession = Depends(get_async_db),
+    idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key"),
+    _check: None = Depends(RequireCapability(Capabilities.AUTH_MANAGE_SESSIONS)),
 ):
     """
     Logout from specific device.
     
-    Requires: Valid access token
+    Requires: Valid access token + AUTH_MANAGE_SESSIONS capability
+    Idempotency: Include Idempotency-Key header to prevent duplicate session revocations.
     """
     session_service = SessionService(db)
     
     try:
         await session_service.revoke_session(
             session_id=session_id,
-            user_id=current_user['user_id']
+            user_id=current_user['user_id'],
+            idempotency_key=idempotency_key,
         )
         
         return LogoutResponse(
@@ -204,16 +229,24 @@ async def logout_device(
     - Revokes all refresh tokens
     - Revokes all access tokens
     - Current device remains logged in
+    
+    **Infrastructure:**
+    - Idempotency support via Idempotency-Key header
+    - Capability check: AUTH_MANAGE_SESSIONS
+    - Events emitted through transactional outbox
     """
 )
 async def logout_all_devices(
     current_user = Depends(get_current_user),
-    db: AsyncSession = Depends(get_async_db)
+    db: AsyncSession = Depends(get_async_db),
+    idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key"),
+    _check: None = Depends(RequireCapability(Capabilities.AUTH_MANAGE_SESSIONS)),
 ):
     """
     Logout from all devices except current.
     
-    Requires: Valid access token
+    Requires: Valid access token + AUTH_MANAGE_SESSIONS capability
+    Idempotency: Include Idempotency-Key header to prevent duplicate mass logouts.
     """
     session_service = SessionService(db)
     
@@ -232,7 +265,8 @@ async def logout_all_devices(
     # Revoke all except current
     await session_service.revoke_all_sessions(
         user_id=current_user['user_id'],
-        except_session_id=current_session_id
+        except_session_id=current_session_id,
+        idempotency_key=idempotency_key,
     )
     
     sessions_revoked = len(sessions) - (1 if current_session else 0)
@@ -251,16 +285,22 @@ async def logout_all_devices(
     Logout from current device only.
     
     **Standard logout flow.**
+    
+    **Infrastructure:**
+    - Idempotency support via Idempotency-Key header
+    - Events emitted through transactional outbox
     """
 )
 async def logout(
     current_user = Depends(get_current_user),
-    db: AsyncSession = Depends(get_async_db)
+    db: AsyncSession = Depends(get_async_db),
+    idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key"),
 ):
     """
     Logout from current device.
     
     Requires: Valid access token
+    Idempotency: Include Idempotency-Key header to prevent duplicate logouts.
     """
     session_service = SessionService(db)
     
@@ -282,7 +322,8 @@ async def logout(
     
     await session_service.revoke_session(
         session_id=current_session.id,
-        user_id=current_user['user_id']
+        user_id=current_user['user_id'],
+        idempotency_key=idempotency_key,
     )
     
     return LogoutResponse(

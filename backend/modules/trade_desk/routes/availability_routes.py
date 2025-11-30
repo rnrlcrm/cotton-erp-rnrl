@@ -14,6 +14,8 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend.core.auth.capabilities.decorators import RequireCapability
+from backend.core.auth.capabilities.definitions import Capabilities
 from backend.core.auth.dependencies import get_current_user, require_permissions
 from backend.db.async_session import get_db
 from backend.modules.trade_desk.schemas import (
@@ -267,9 +269,10 @@ async def update_availability(
     availability_id: UUID,
     request: AvailabilityUpdateRequest,
     current_user=Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    _check: None = Depends(RequireCapability(Capabilities.AVAILABILITY_UPDATE))
 ):
-    """Update availability (seller only)."""
+    """Update availability (seller only). Requires AVAILABILITY_UPDATE capability.""""
     seller_id = get_seller_id_from_user(current_user)
     service = AvailabilityService(db)
     
@@ -301,16 +304,16 @@ async def update_availability(
     "/{availability_id}/approve",
     response_model=AvailabilityResponse,
     summary="Approve availability",
-    description="Approve availability for public listing (requires approval permission)"
+    description="Approve availability for public listing (requires AVAILABILITY_APPROVE capability)"
 )
 async def approve_availability(
     availability_id: UUID,
     request: ApprovalRequest,
     current_user=Depends(get_current_user),
-    _=Depends(require_permissions("availability.approve")),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    _check: None = Depends(RequireCapability(Capabilities.AVAILABILITY_APPROVE))
 ):
-    """Approve availability for public listing."""
+    """Approve availability for public listing (CRITICAL). Requires AVAILABILITY_APPROVE capability.""""
     service = AvailabilityService(db)
     
     try:
@@ -337,17 +340,17 @@ async def approve_availability(
     "/{availability_id}/reserve",
     response_model=AvailabilityResponse,
     summary="Reserve quantity (Internal API)",
-    description="Called by Matching Engine to reserve quantity for negotiation",
+    description="Called by Matching Engine to reserve quantity for negotiation. Requires AVAILABILITY_RESERVE capability.",
     tags=["Internal APIs"]
 )
 async def reserve_quantity(
     availability_id: UUID,
     request: ReserveRequest,
     current_user=Depends(get_current_user),
-    _=Depends(require_permissions("availability.reserve")),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    _check: None = Depends(RequireCapability(Capabilities.AVAILABILITY_RESERVE))
 ):
-    """Reserve quantity for negotiation (internal API)."""
+    """Reserve quantity for negotiation (internal API). Requires AVAILABILITY_RESERVE capability."""
     service = AvailabilityService(db)
     
     try:
@@ -371,17 +374,17 @@ async def reserve_quantity(
     "/{availability_id}/release",
     response_model=AvailabilityResponse,
     summary="Release quantity (Internal API)",
-    description="Called by Matching Engine to release reserved quantity",
+    description="Called by Matching Engine to release reserved quantity. Requires AVAILABILITY_RELEASE capability.",
     tags=["Internal APIs"]
 )
 async def release_quantity(
     availability_id: UUID,
     request: ReleaseRequest,
     current_user=Depends(get_current_user),
-    _=Depends(require_permissions("availability.release")),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    _check: None = Depends(RequireCapability(Capabilities.AVAILABILITY_RELEASE))
 ):
-    """Release reserved quantity (internal API)."""
+    """Release reserved quantity (internal API). Requires AVAILABILITY_RELEASE capability.""""
     service = AvailabilityService(db)
     
     try:
@@ -404,17 +407,17 @@ async def release_quantity(
     "/{availability_id}/mark-sold",
     response_model=AvailabilityResponse,
     summary="Mark as sold (Internal API)",
-    description="Called by Trade Finalization Engine to mark quantity as sold",
+    description="Called by Trade Finalization Engine to mark quantity as sold. Requires AVAILABILITY_MARK_SOLD capability.",
     tags=["Internal APIs"]
 )
 async def mark_as_sold(
     availability_id: UUID,
     request: MarkSoldRequest,
     current_user=Depends(get_current_user),
-    _=Depends(require_permissions("availability.mark_sold")),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    _check: None = Depends(RequireCapability(Capabilities.AVAILABILITY_MARK_SOLD))
 ):
-    """Mark quantity as sold (internal API)."""
+    """Mark quantity as sold (internal API). Requires AVAILABILITY_MARK_SOLD capability."""
     service = AvailabilityService(db)
     
     try:

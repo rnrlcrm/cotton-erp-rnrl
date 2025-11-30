@@ -10,10 +10,12 @@ from io import BytesIO
 from typing import List, Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, Header, HTTPException, UploadFile, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend.core.auth.capabilities.decorators import RequireCapability
+from backend.core.auth.capabilities.definitions import Capabilities
 from backend.core.events.emitter import EventEmitter
 from backend.db.session import get_db
 from backend.modules.settings.commodities.ai_helpers import CommodityAIHelper
@@ -111,9 +113,11 @@ def create_commodity(
     db: AsyncSession = Depends(get_db),
     event_emitter: EventEmitter = Depends(get_event_emitter),
     ai_helper: CommodityAIHelper = Depends(get_ai_helper),
-    user_id: UUID = Depends(get_current_user_id)
+    user_id: UUID = Depends(get_current_user_id),
+    idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key"),
+    _check: None = Depends(RequireCapability(Capabilities.COMMODITY_CREATE))
 ):
-    """Create new commodity with AI enrichment"""
+    """Create new commodity with AI enrichment. Requires COMMODITY_CREATE capability. Supports idempotency."""
     service = CommodityService(db, event_emitter, ai_helper, user_id)
     commodity = service.create_commodity(data)
     return commodity
@@ -160,9 +164,11 @@ def update_commodity(
     db: AsyncSession = Depends(get_db),
     event_emitter: EventEmitter = Depends(get_event_emitter),
     ai_helper: CommodityAIHelper = Depends(get_ai_helper),
-    user_id: UUID = Depends(get_current_user_id)
+    user_id: UUID = Depends(get_current_user_id),
+    idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key"),
+    _check: None = Depends(RequireCapability(Capabilities.COMMODITY_UPDATE))
 ):
-    """Update commodity"""
+    """Update commodity. Requires COMMODITY_UPDATE capability. Supports idempotency."""
     service = CommodityService(db, event_emitter, ai_helper, user_id)
     commodity = service.update_commodity(commodity_id, data)
     if not commodity:
@@ -179,9 +185,11 @@ def delete_commodity(
     db: AsyncSession = Depends(get_db),
     event_emitter: EventEmitter = Depends(get_event_emitter),
     ai_helper: CommodityAIHelper = Depends(get_ai_helper),
-    user_id: UUID = Depends(get_current_user_id)
+    user_id: UUID = Depends(get_current_user_id),
+    idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key"),
+    _check: None = Depends(RequireCapability(Capabilities.COMMODITY_DELETE))
 ):
-    """Delete commodity"""
+    """Delete commodity. Requires COMMODITY_DELETE capability. Supports idempotency."""
     service = CommodityService(db, event_emitter, ai_helper, user_id)
     success = service.delete_commodity(commodity_id)
     if not success:
@@ -197,9 +205,11 @@ def delete_commodity(
 def detect_category(
     name: str,
     description: Optional[str] = None,
-    ai_helper: CommodityAIHelper = Depends(get_ai_helper)
+    ai_helper: CommodityAIHelper = Depends(get_ai_helper),
+    idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key"),
+    _check: None = Depends(RequireCapability(Capabilities.COMMODITY_CREATE))
 ):
-    """AI: Detect commodity category from name/description"""
+    """AI: Detect commodity category from name/description. Requires COMMODITY_CREATE capability. Supports idempotency."""
     suggestion = ai_helper.detect_commodity_category(name, description)
     return suggestion
 
@@ -209,9 +219,11 @@ def suggest_hsn(
     name: str,
     category: str,
     description: Optional[str] = None,
-    ai_helper: CommodityAIHelper = Depends(get_ai_helper)
+    ai_helper: CommodityAIHelper = Depends(get_ai_helper),
+    idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key"),
+    _check: None = Depends(RequireCapability(Capabilities.COMMODITY_CREATE))
 ):
-    """AI: Suggest HSN code and GST rate"""
+    """AI: Suggest HSN code and GST rate. Requires COMMODITY_CREATE capability. Supports idempotency."""
     suggestion = ai_helper.suggest_hsn_code(name, category, description)
     return suggestion
 
@@ -221,9 +233,11 @@ def suggest_parameters(
     commodity_id: UUID,
     category: str,
     name: str,
-    ai_helper: CommodityAIHelper = Depends(get_ai_helper)
+    ai_helper: CommodityAIHelper = Depends(get_ai_helper),
+    idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key"),
+    _check: None = Depends(RequireCapability(Capabilities.COMMODITY_MANAGE_SPECIFICATIONS))
 ):
-    """AI: Suggest quality parameters for commodity"""
+    """AI: Suggest quality parameters for commodity. Requires COMMODITY_MANAGE_SPECIFICATIONS capability. Supports idempotency."""
     suggestions = ai_helper.suggest_quality_parameters(commodity_id, category, name)
     return suggestions
 
@@ -236,9 +250,11 @@ def add_variety(
     data: CommodityVarietyCreate,
     db: AsyncSession = Depends(get_db),
     event_emitter: EventEmitter = Depends(get_event_emitter),
-    user_id: UUID = Depends(get_current_user_id)
+    user_id: UUID = Depends(get_current_user_id),
+    idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key"),
+    _check: None = Depends(RequireCapability(Capabilities.COMMODITY_CREATE))
 ):
-    """Add variety to commodity"""
+    """Add variety to commodity. Requires COMMODITY_CREATE capability. Supports idempotency."""
     # Ensure commodity_id matches
     data.commodity_id = commodity_id
     
@@ -266,9 +282,11 @@ def update_variety(
     data: CommodityVarietyUpdate,
     db: AsyncSession = Depends(get_db),
     event_emitter: EventEmitter = Depends(get_event_emitter),
-    user_id: UUID = Depends(get_current_user_id)
+    user_id: UUID = Depends(get_current_user_id),
+    idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key"),
+    _check: None = Depends(RequireCapability(Capabilities.COMMODITY_UPDATE))
 ):
-    """Update variety"""
+    """Update variety. Requires COMMODITY_UPDATE capability. Supports idempotency."""
     service = CommodityVarietyService(db, event_emitter, user_id)
     variety = service.update_variety(variety_id, data)
     if not variety:
@@ -287,9 +305,11 @@ def add_parameter(
     data: CommodityParameterCreate,
     db: AsyncSession = Depends(get_db),
     event_emitter: EventEmitter = Depends(get_event_emitter),
-    user_id: UUID = Depends(get_current_user_id)
+    user_id: UUID = Depends(get_current_user_id),
+    idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key"),
+    _check: None = Depends(RequireCapability(Capabilities.COMMODITY_MANAGE_SPECIFICATIONS))
 ):
-    """Add quality parameter to commodity"""
+    """Add quality parameter to commodity. Requires COMMODITY_MANAGE_SPECIFICATIONS capability. Supports idempotency."""
     # Ensure commodity_id matches
     data.commodity_id = commodity_id
     
@@ -317,9 +337,11 @@ def update_parameter(
     data: CommodityParameterUpdate,
     db: AsyncSession = Depends(get_db),
     event_emitter: EventEmitter = Depends(get_event_emitter),
-    user_id: UUID = Depends(get_current_user_id)
+    user_id: UUID = Depends(get_current_user_id),
+    idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key"),
+    _check: None = Depends(RequireCapability(Capabilities.COMMODITY_MANAGE_SPECIFICATIONS))
 ):
-    """Update parameter"""
+    """Update parameter. Requires COMMODITY_MANAGE_SPECIFICATIONS capability. Supports idempotency."""
     service = CommodityParameterService(db, event_emitter, user_id)
     parameter = service.update_parameter(parameter_id, data)
     if not parameter:
@@ -335,9 +357,11 @@ def update_parameter(
 @router.post("/system-parameters", response_model=SystemCommodityParameterResponse, status_code=status.HTTP_201_CREATED)
 def create_system_parameter(
     data: SystemCommodityParameterCreate,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key"),
+    _check: None = Depends(RequireCapability(Capabilities.SYSTEM_CONFIGURE))
 ):
-    """Create system-wide commodity parameter"""
+    """Create system-wide commodity parameter. Requires SYSTEM_CONFIGURE capability. Supports idempotency."""
     service = SystemCommodityParameterService(db)
     parameter = service.create_parameter(data)
     return parameter
@@ -358,9 +382,11 @@ def list_system_parameters(
 def update_system_parameter(
     parameter_id: UUID,
     data: SystemCommodityParameterUpdate,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key"),
+    _check: None = Depends(RequireCapability(Capabilities.SYSTEM_CONFIGURE))
 ):
-    """Update system parameter"""
+    """Update system parameter. Requires SYSTEM_CONFIGURE capability. Supports idempotency."""
     service = SystemCommodityParameterService(db)
     parameter = service.update_parameter(parameter_id, data)
     if not parameter:
@@ -378,9 +404,11 @@ def create_trade_type(
     data: TradeTypeCreate,
     db: AsyncSession = Depends(get_db),
     event_emitter: EventEmitter = Depends(get_event_emitter),
-    user_id: UUID = Depends(get_current_user_id)
+    user_id: UUID = Depends(get_current_user_id),
+    idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key"),
+    _check: None = Depends(RequireCapability(Capabilities.COMMODITY_CREATE))
 ):
-    """Create trade type"""
+    """Create trade type. Requires COMMODITY_CREATE capability. Supports idempotency."""
     service = TradeTypeService(db, event_emitter, user_id)
     trade_type = service.create_trade_type(data)
     return trade_type
@@ -404,9 +432,11 @@ def update_trade_type(
     data: TradeTypeUpdate,
     db: AsyncSession = Depends(get_db),
     event_emitter: EventEmitter = Depends(get_event_emitter),
-    user_id: UUID = Depends(get_current_user_id)
+    user_id: UUID = Depends(get_current_user_id),
+    idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key"),
+    _check: None = Depends(RequireCapability(Capabilities.COMMODITY_UPDATE))
 ):
-    """Update trade type"""
+    """Update trade type. Requires COMMODITY_UPDATE capability. Supports idempotency."""
     service = TradeTypeService(db, event_emitter, user_id)
     trade_type = service.update_trade_type(trade_type_id, data)
     if not trade_type:
@@ -424,9 +454,11 @@ def create_bargain_type(
     data: BargainTypeCreate,
     db: AsyncSession = Depends(get_db),
     event_emitter: EventEmitter = Depends(get_event_emitter),
-    user_id: UUID = Depends(get_current_user_id)
+    user_id: UUID = Depends(get_current_user_id),
+    idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key"),
+    _check: None = Depends(RequireCapability(Capabilities.COMMODITY_CREATE))
 ):
-    """Create bargain type"""
+    """Create bargain type. Requires COMMODITY_CREATE capability. Supports idempotency."""
     service = BargainTypeService(db, event_emitter, user_id)
     bargain_type = service.create_bargain_type(data)
     return bargain_type
@@ -450,9 +482,11 @@ def update_bargain_type(
     data: BargainTypeUpdate,
     db: AsyncSession = Depends(get_db),
     event_emitter: EventEmitter = Depends(get_event_emitter),
-    user_id: UUID = Depends(get_current_user_id)
+    user_id: UUID = Depends(get_current_user_id),
+    idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key"),
+    _check: None = Depends(RequireCapability(Capabilities.COMMODITY_UPDATE))
 ):
-    """Update bargain type"""
+    """Update bargain type. Requires COMMODITY_UPDATE capability. Supports idempotency."""
     service = BargainTypeService(db, event_emitter, user_id)
     bargain_type = service.update_bargain_type(bargain_type_id, data)
     if not bargain_type:
@@ -470,9 +504,11 @@ def create_passing_term(
     data: PassingTermCreate,
     db: AsyncSession = Depends(get_db),
     event_emitter: EventEmitter = Depends(get_event_emitter),
-    user_id: UUID = Depends(get_current_user_id)
+    user_id: UUID = Depends(get_current_user_id),
+    idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key"),
+    _check: None = Depends(RequireCapability(Capabilities.COMMODITY_CREATE))
 ):
-    """Create passing term"""
+    """Create passing term. Requires COMMODITY_CREATE capability. Supports idempotency."""
     service = PassingTermService(db, event_emitter, user_id)
     term = service.create_passing_term(data)
     return term
@@ -496,9 +532,11 @@ def update_passing_term(
     data: PassingTermUpdate,
     db: AsyncSession = Depends(get_db),
     event_emitter: EventEmitter = Depends(get_event_emitter),
-    user_id: UUID = Depends(get_current_user_id)
+    user_id: UUID = Depends(get_current_user_id),
+    idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key"),
+    _check: None = Depends(RequireCapability(Capabilities.COMMODITY_UPDATE))
 ):
-    """Update passing term"""
+    """Update passing term. Requires COMMODITY_UPDATE capability. Supports idempotency."""
     service = PassingTermService(db, event_emitter, user_id)
     term = service.update_passing_term(term_id, data)
     if not term:
@@ -516,9 +554,11 @@ def create_weightment_term(
     data: WeightmentTermCreate,
     db: AsyncSession = Depends(get_db),
     event_emitter: EventEmitter = Depends(get_event_emitter),
-    user_id: UUID = Depends(get_current_user_id)
+    user_id: UUID = Depends(get_current_user_id),
+    idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key"),
+    _check: None = Depends(RequireCapability(Capabilities.COMMODITY_CREATE))
 ):
-    """Create weightment term"""
+    """Create weightment term. Requires COMMODITY_CREATE capability. Supports idempotency."""
     service = WeightmentTermService(db, event_emitter, user_id)
     term = service.create_weightment_term(data)
     return term
@@ -542,9 +582,11 @@ def update_weightment_term(
     data: WeightmentTermUpdate,
     db: AsyncSession = Depends(get_db),
     event_emitter: EventEmitter = Depends(get_event_emitter),
-    user_id: UUID = Depends(get_current_user_id)
+    user_id: UUID = Depends(get_current_user_id),
+    idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key"),
+    _check: None = Depends(RequireCapability(Capabilities.COMMODITY_UPDATE))
 ):
-    """Update weightment term"""
+    """Update weightment term. Requires COMMODITY_UPDATE capability. Supports idempotency."""
     service = WeightmentTermService(db, event_emitter, user_id)
     term = service.update_weightment_term(term_id, data)
     if not term:
@@ -562,9 +604,11 @@ def create_delivery_term(
     data: DeliveryTermCreate,
     db: AsyncSession = Depends(get_db),
     event_emitter: EventEmitter = Depends(get_event_emitter),
-    user_id: UUID = Depends(get_current_user_id)
+    user_id: UUID = Depends(get_current_user_id),
+    idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key"),
+    _check: None = Depends(RequireCapability(Capabilities.COMMODITY_CREATE))
 ):
-    """Create delivery term"""
+    """Create delivery term. Requires COMMODITY_CREATE capability. Supports idempotency."""
     service = DeliveryTermService(db, event_emitter, user_id)
     term = service.create_delivery_term(data)
     return term
@@ -588,9 +632,11 @@ def update_delivery_term(
     data: DeliveryTermUpdate,
     db: AsyncSession = Depends(get_db),
     event_emitter: EventEmitter = Depends(get_event_emitter),
-    user_id: UUID = Depends(get_current_user_id)
+    user_id: UUID = Depends(get_current_user_id),
+    idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key"),
+    _check: None = Depends(RequireCapability(Capabilities.COMMODITY_UPDATE))
 ):
-    """Update delivery term"""
+    """Update delivery term. Requires COMMODITY_UPDATE capability. Supports idempotency."""
     service = DeliveryTermService(db, event_emitter, user_id)
     term = service.update_delivery_term(term_id, data)
     if not term:
@@ -608,9 +654,11 @@ def create_payment_term(
     data: PaymentTermCreate,
     db: AsyncSession = Depends(get_db),
     event_emitter: EventEmitter = Depends(get_event_emitter),
-    user_id: UUID = Depends(get_current_user_id)
+    user_id: UUID = Depends(get_current_user_id),
+    idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key"),
+    _check: None = Depends(RequireCapability(Capabilities.COMMODITY_CREATE))
 ):
-    """Create payment term"""
+    """Create payment term. Requires COMMODITY_CREATE capability. Supports idempotency."""
     service = PaymentTermService(db, event_emitter, user_id)
     term = service.create_payment_term(data)
     return term
@@ -634,9 +682,11 @@ def update_payment_term(
     data: PaymentTermUpdate,
     db: AsyncSession = Depends(get_db),
     event_emitter: EventEmitter = Depends(get_event_emitter),
-    user_id: UUID = Depends(get_current_user_id)
+    user_id: UUID = Depends(get_current_user_id),
+    idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key"),
+    _check: None = Depends(RequireCapability(Capabilities.COMMODITY_UPDATE))
 ):
-    """Update payment term"""
+    """Update payment term. Requires COMMODITY_UPDATE capability. Supports idempotency."""
     service = PaymentTermService(db, event_emitter, user_id)
     term = service.update_payment_term(term_id, data)
     if not term:
@@ -655,9 +705,11 @@ def set_commission(
     data: CommissionStructureCreate,
     db: AsyncSession = Depends(get_db),
     event_emitter: EventEmitter = Depends(get_event_emitter),
-    user_id: UUID = Depends(get_current_user_id)
+    user_id: UUID = Depends(get_current_user_id),
+    idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key"),
+    _check: None = Depends(RequireCapability(Capabilities.COMMODITY_UPDATE_PRICE))
 ):
-    """Set commission structure for commodity"""
+    """Set commission structure for commodity (financial data). Requires COMMODITY_UPDATE_PRICE capability. Supports idempotency."""
     # Ensure commodity_id matches
     data.commodity_id = commodity_id
     
@@ -690,9 +742,11 @@ def update_commission(
     data: CommissionStructureUpdate,
     db: AsyncSession = Depends(get_db),
     event_emitter: EventEmitter = Depends(get_event_emitter),
-    user_id: UUID = Depends(get_current_user_id)
+    user_id: UUID = Depends(get_current_user_id),
+    idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key"),
+    _check: None = Depends(RequireCapability(Capabilities.COMMODITY_UPDATE_PRICE))
 ):
-    """Update commission structure"""
+    """Update commission structure (financial data). Requires COMMODITY_UPDATE_PRICE capability. Supports idempotency."""
     service = CommissionStructureService(db, event_emitter, user_id)
     commission = service.update_commission(commission_id, data)
     if not commission:
@@ -710,10 +764,12 @@ def bulk_upload_commodities(
     file: UploadFile = File(...),
     db: AsyncSession = Depends(get_db),
     event_emitter: EventEmitter = Depends(get_event_emitter),
-    user_id: UUID = Depends(get_current_user_id)
+    user_id: UUID = Depends(get_current_user_id),
+    idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key"),
+    _check: None = Depends(RequireCapability(Capabilities.COMMODITY_CREATE))
 ):
     """
-    Bulk upload commodities from Excel file.
+    Bulk upload commodities from Excel file. Requires COMMODITY_CREATE capability. Supports idempotency.
     
     Accepts .xlsx or .csv file with columns:
     - name, category, hsn_code, gst_rate, description, uom
@@ -933,10 +989,12 @@ def list_available_units():
 def validate_bulk_upload(
     file: UploadFile = File(...),
     db: AsyncSession = Depends(get_db),
-    user_id: UUID = Depends(get_current_user_id)
+    user_id: UUID = Depends(get_current_user_id),
+    idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key"),
+    _check: None = Depends(RequireCapability(Capabilities.COMMODITY_CREATE))
 ):
     """
-    Validate bulk upload file without importing.
+    Validate bulk upload file without importing. Requires COMMODITY_CREATE capability. Supports idempotency.
     
     Returns validation errors and warnings before actual import.
     """

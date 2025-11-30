@@ -16,12 +16,14 @@ Authentication: JWT via get_current_user
 """
 
 from datetime import datetime
-from typing import List
+from typing import List, Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, Header, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend.core.auth.capabilities.decorators import RequireCapability
+from backend.core.auth.capabilities.definitions import Capabilities
 from backend.core.auth.dependencies import get_current_user
 from backend.db.async_session import get_db
 from backend.modules.risk.risk_service import RiskService
@@ -72,16 +74,18 @@ def get_ml_model() -> MLRiskModel:
     "/assess/requirement",
     response_model=RiskAssessmentResponse,
     summary="Assess Requirement Risk",
-    description="Perform risk assessment for a buyer requirement",
+    description="Perform risk assessment for a buyer requirement. Requires ADMIN_VIEW_ALL_DATA capability.",
     responses={404: {"model": ErrorResponse}, 500: {"model": ErrorResponse}}
 )
 async def assess_requirement_risk(
     request: RequirementRiskAssessmentRequest,
     current_user=Depends(get_current_user),
-    risk_service: RiskService = Depends(get_risk_service)
+    risk_service: RiskService = Depends(get_risk_service),
+    idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key"),
+    _check: None = Depends(RequireCapability(Capabilities.ADMIN_VIEW_ALL_DATA))
 ):
     """
-    Assess risk for a requirement.
+    Assess risk for a requirement. Requires ADMIN_VIEW_ALL_DATA capability.
     
     Evaluates:
     - Buyer credit limit and exposure
@@ -108,16 +112,18 @@ async def assess_requirement_risk(
     "/assess/availability",
     response_model=RiskAssessmentResponse,
     summary="Assess Availability Risk",
-    description="Perform risk assessment for a seller availability",
+    description="Perform risk assessment for a seller availability. Requires ADMIN_VIEW_ALL_DATA capability.",
     responses={404: {"model": ErrorResponse}, 500: {"model": ErrorResponse}}
 )
 async def assess_availability_risk(
     request: AvailabilityRiskAssessmentRequest,
     current_user=Depends(get_current_user),
-    risk_service: RiskService = Depends(get_risk_service)
+    risk_service: RiskService = Depends(get_risk_service),
+    idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key"),
+    _check: None = Depends(RequireCapability(Capabilities.ADMIN_VIEW_ALL_DATA))
 ):
     """
-    Assess risk for an availability.
+    Assess risk for an availability. Requires ADMIN_VIEW_ALL_DATA capability.
     
     Evaluates:
     - Seller credit limit and exposure
@@ -144,16 +150,18 @@ async def assess_availability_risk(
     "/assess/trade",
     response_model=TradeRiskAssessmentResponse,
     summary="Assess Bilateral Trade Risk",
-    description="Perform comprehensive bilateral risk assessment for a proposed trade",
+    description="Perform comprehensive bilateral risk assessment for a proposed trade. Requires ADMIN_VIEW_ALL_DATA capability.",
     responses={404: {"model": ErrorResponse}, 500: {"model": ErrorResponse}}
 )
 async def assess_trade_risk(
     request: TradeRiskAssessmentRequest,
     current_user=Depends(get_current_user),
-    risk_service: RiskService = Depends(get_risk_service)
+    risk_service: RiskService = Depends(get_risk_service),
+    idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key"),
+    _check: None = Depends(RequireCapability(Capabilities.ADMIN_VIEW_ALL_DATA))
 ):
     """
-    Assess bilateral trade risk.
+    Assess bilateral trade risk. Requires ADMIN_VIEW_ALL_DATA capability.
     
     Evaluates:
     - Buyer risk (credit, rating, payment history)
@@ -184,16 +192,18 @@ async def assess_trade_risk(
     "/assess/partner",
     response_model=RiskAssessmentResponse,
     summary="Assess Partner Counterparty Risk",
-    description="Assess overall counterparty risk for a partner",
+    description="Assess overall counterparty risk for a partner. Requires ADMIN_VIEW_ALL_DATA capability.",
     responses={404: {"model": ErrorResponse}, 500: {"model": ErrorResponse}}
 )
 async def assess_partner_risk(
     request: PartnerRiskAssessmentRequest,
     current_user=Depends(get_current_user),
-    risk_service: RiskService = Depends(get_risk_service)
+    risk_service: RiskService = Depends(get_risk_service),
+    idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key"),
+    _check: None = Depends(RequireCapability(Capabilities.ADMIN_VIEW_ALL_DATA))
 ):
     """
-    Assess counterparty risk for a partner.
+    Assess counterparty risk for a partner. Requires ADMIN_VIEW_ALL_DATA capability.
     
     Evaluates:
     - Credit limit and exposure
@@ -223,16 +233,18 @@ async def assess_partner_risk(
     "/validate/party-links",
     response_model=PartyLinksCheckResponse,
     summary="Check Party Links",
-    description="Validate for related party transactions (PAN/GST/mobile/email matching)",
+    description="Validate for related party transactions (PAN/GST/mobile/email matching). Requires ADMIN_VIEW_ALL_DATA capability.",
     responses={500: {"model": ErrorResponse}}
 )
 async def check_party_links(
     request: PartyLinksCheckRequest,
     current_user=Depends(get_current_user),
-    risk_service: RiskService = Depends(get_risk_service)
+    risk_service: RiskService = Depends(get_risk_service),
+    idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key"),
+    _check: None = Depends(RequireCapability(Capabilities.ADMIN_VIEW_ALL_DATA))
 ):
     """
-    Check for party links between buyer and seller.
+    Check for party links between buyer and seller. Requires ADMIN_VIEW_ALL_DATA capability.
     
     Validates:
     - Same PAN number → BLOCK
@@ -259,16 +271,18 @@ async def check_party_links(
     "/validate/circular-trading",
     response_model=CircularTradingCheckResponse,
     summary="Check Circular Trading",
-    description="Detect same-day circular trading (wash trading prevention)",
+    description="Detect same-day circular trading (wash trading prevention). Requires ADMIN_VIEW_ALL_DATA capability.",
     responses={500: {"model": ErrorResponse}}
 )
 async def check_circular_trading(
     request: CircularTradingCheckRequest,
     current_user=Depends(get_current_user),
-    risk_service: RiskService = Depends(get_risk_service)
+    risk_service: RiskService = Depends(get_risk_service),
+    idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key"),
+    _check: None = Depends(RequireCapability(Capabilities.ADMIN_VIEW_ALL_DATA))
 ):
     """
-    Check for circular trading patterns.
+    Check for circular trading patterns. Requires ADMIN_VIEW_ALL_DATA capability.
     
     Validates:
     - Partner has opposite position (BUY ↔ SELL) for same commodity
@@ -296,16 +310,18 @@ async def check_circular_trading(
     "/validate/role-restriction",
     response_model=RoleRestrictionCheckResponse,
     summary="Validate Role Restrictions",
-    description="Check if partner role allows transaction type",
+    description="Check if partner role allows transaction type. Requires ADMIN_VIEW_ALL_DATA capability.",
     responses={500: {"model": ErrorResponse}}
 )
 async def validate_role_restriction(
     request: RoleRestrictionCheckRequest,
     current_user=Depends(get_current_user),
-    risk_service: RiskService = Depends(get_risk_service)
+    risk_service: RiskService = Depends(get_risk_service),
+    idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key"),
+    _check: None = Depends(RequireCapability(Capabilities.ADMIN_VIEW_ALL_DATA))
 ):
     """
-    Validate partner role restrictions.
+    Validate partner role restrictions. Requires ADMIN_VIEW_ALL_DATA capability.
     
     Rules:
     - BUYER can only BUY (cannot SELL)
@@ -335,16 +351,18 @@ async def validate_role_restriction(
     "/ml/predict/payment-default",
     response_model=MLPredictionResponse,
     summary="ML Payment Default Prediction",
-    description="Predict payment default risk using ML model",
+    description="Predict payment default risk using ML model. Requires ADMIN_VIEW_ALL_DATA capability.",
     responses={500: {"model": ErrorResponse}}
 )
 async def predict_payment_default(
     request: MLPredictionRequest,
     current_user=Depends(get_current_user),
-    ml_model: MLRiskModel = Depends(get_ml_model)
+    ml_model: MLRiskModel = Depends(get_ml_model),
+    idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key"),
+    _check: None = Depends(RequireCapability(Capabilities.ADMIN_VIEW_ALL_DATA))
 ):
     """
-    Predict payment default probability using ML.
+    Predict payment default probability using ML. Requires ADMIN_VIEW_ALL_DATA capability.
     
     Input features:
     - Credit utilization %
@@ -379,16 +397,18 @@ async def predict_payment_default(
     "/ml/train",
     response_model=MLModelTrainResponse,
     summary="Train ML Risk Models",
-    description="Train ML models with synthetic or real data",
+    description="Train ML models with synthetic or real data. Requires ADMIN_MANAGE_USERS capability.",
     responses={500: {"model": ErrorResponse}}
 )
 async def train_ml_models(
     request: MLModelTrainRequest,
     current_user=Depends(get_current_user),
-    ml_model: MLRiskModel = Depends(get_ml_model)
+    ml_model: MLRiskModel = Depends(get_ml_model),
+    idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key"),
+    _check: None = Depends(RequireCapability(Capabilities.ADMIN_MANAGE_USERS))
 ):
     """
-    Train ML risk models.
+    Train ML risk models. Requires ADMIN_MANAGE_USERS capability.
     
     Can use:
     - Synthetic data (if no real data available)
@@ -473,15 +493,17 @@ async def monitor_partner_exposure(
     "/batch/assess-requirements",
     response_model=BatchRiskAssessmentResponse,
     summary="Batch Assess All Active Requirements",
-    description="Assess risk for all active requirements in one operation",
+    description="Assess risk for all active requirements in one operation. Requires ADMIN_VIEW_ALL_DATA capability.",
     responses={500: {"model": ErrorResponse}}
 )
 async def batch_assess_requirements(
     current_user=Depends(get_current_user),
-    risk_service: RiskService = Depends(get_risk_service)
+    risk_service: RiskService = Depends(get_risk_service),
+    idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key"),
+    _check: None = Depends(RequireCapability(Capabilities.ADMIN_VIEW_ALL_DATA))
 ):
     """
-    Batch assess all active requirements.
+    Batch assess all active requirements. Requires ADMIN_VIEW_ALL_DATA capability.
     
     Useful for:
     - Daily risk reviews
@@ -518,15 +540,17 @@ async def batch_assess_requirements(
     "/batch/assess-availabilities",
     response_model=BatchRiskAssessmentResponse,
     summary="Batch Assess All Active Availabilities",
-    description="Assess risk for all active availabilities in one operation",
+    description="Assess risk for all active availabilities in one operation. Requires ADMIN_VIEW_ALL_DATA capability.",
     responses={500: {"model": ErrorResponse}}
 )
 async def batch_assess_availabilities(
     current_user=Depends(get_current_user),
-    risk_service: RiskService = Depends(get_risk_service)
+    risk_service: RiskService = Depends(get_risk_service),
+    idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key"),
+    _check: None = Depends(RequireCapability(Capabilities.ADMIN_VIEW_ALL_DATA))
 ):
     """
-    Batch assess all active availabilities.
+    Batch assess all active availabilities. Requires ADMIN_VIEW_ALL_DATA capability.
     
     Useful for:
     - Daily risk reviews
