@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.core.events.base import BaseEvent
 from backend.core.events.store import EventStore
+from backend.core.events.versioning import validate_event_version
 
 
 class EventEmitter:
@@ -37,10 +38,13 @@ class EventEmitter:
         Emit an event to the event store.
         
         This method:
-        1. Validates the event
+        1. Validates the event version
         2. Stores it in the database
         3. (Future: publish to message queue for async processing)
         """
+        # Validate event version (15-year compatibility check)
+        validate_event_version(event)
+        
         await self.store.append(
             event_type=event.event_type,
             aggregate_id=event.aggregate_id,

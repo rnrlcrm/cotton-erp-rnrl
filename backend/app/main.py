@@ -9,6 +9,7 @@ from backend.modules.partners.router import router as partners_router
 from backend.api.v1.routers.user_onboarding import router as user_onboarding_router
 from backend.app.middleware.security import RequestIDMiddleware, SecureHeadersMiddleware
 from backend.app.middleware import AuthMiddleware, DataIsolationMiddleware
+from backend.app.middleware.idempotency import IdempotencyMiddleware
 import logging, json
 from logging.config import dictConfig
 from pathlib import Path
@@ -82,17 +83,56 @@ def create_app() -> FastAPI:
 		with log_cfg_path.open() as f:
 			cfg = json.load(f)
 		dictConfig(cfg)
-	# OpenTelemetry instrumentation (only if endpoint configured)
+	
+	# Enable PII sanitization for production (15-year GDPR compliance)
+	if os.getenv("ENABLE_PII_FILTER", "true").lower() == "true":
+		try:
+			from backend.core.logging.pii_filter import PIIFilter
+			
+			root_logger = logging.getLogger()
+			root_logger.addFilter(PIIFilter())
+			print("✓ PII sanitization enabled for all logs")
+		except ImportError:
+			print("⚠ PII filter not available")
+		except Exception as e:
+			print(f"⚠ Failed to enable PII filter: {e}")
+	# OpenTelemetry instrumentation (GCP-native for 15-year architecture)
 	otlp_endpoint = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT")
-	if otlp_endpoint:
+	gcp_project_id = os.getenv("GCP_PROJECT_ID")
+	
+	if gcp_project_id:
+		# Production: Use GCP Cloud Trace and Cloud Monitoring
+		try:
+			from backend.core.observability.gcp import configure_gcp_observability, instrument_application
+			
+			config = configure_gcp_observability(
+				service_name="cotton-erp-backend",
+				project_id=gcp_project_id,
+				enable_traces=True,
+				enable_metrics=True,
+			)
+			print(f"✓ GCP Observability configured: {config}")
+			
+			# Auto-instrument (will be done after app creation)
+			# instrument_application(app, db_engine)
+			
+		except ImportError:
+			print("⚠ GCP observability libraries not installed")
+			print("  Install: pip install opentelemetry-exporter-gcp-trace opentelemetry-exporter-gcp-monitoring")
+		except Exception as e:
+			print(f"⚠ Failed to configure GCP observability: {e}")
+	
+	elif otlp_endpoint:
+		# Development/Custom: Use OTLP endpoint (original behavior)
 		resource = Resource(attributes={"service.name": "cotton-erp-backend"})
 		provider = TracerProvider(resource=resource)
 		span_exporter = OTLPSpanExporter(endpoint=otlp_endpoint)
 		provider.add_span_processor(BatchSpanProcessor(span_exporter))
 		trace.set_tracer_provider(provider)
 		FastAPIInstrumentor.instrument_app(app, tracer_provider=provider)
-	# Middlewares (order matters: RequestID → Auth → Isolation → Security → CORS)
+	# Middlewares (order matters: RequestID → Idempotency → Auth → Isolation → Security → CORS)
 	app.add_middleware(RequestIDMiddleware)
+	app.add_middleware(IdempotencyMiddleware)  # Add idempotency BEFORE auth (caching layer)
 	app.add_middleware(AuthMiddleware)
 	app.add_middleware(DataIsolationMiddleware)
 	app.add_middleware(SecureHeadersMiddleware)

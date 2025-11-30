@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+import os
 
 
 class AppSettings(BaseSettings):
@@ -15,6 +16,10 @@ class AppSettings(BaseSettings):
     PASSWORD_SCHEME: str = "bcrypt"  # bcrypt|pbkdf2_sha256
     ALLOWED_ORIGINS: str = "*"  # comma-separated for CORS
     REDIS_URL: str = "redis://localhost:6379/0"
+    
+    # GCP Secret Manager integration (15-year architecture)
+    USE_SECRET_MANAGER: bool = False
+    GCP_PROJECT_ID: str = ""
 
     @field_validator("JWT_SECRET")
     @classmethod
@@ -25,5 +30,16 @@ class AppSettings(BaseSettings):
             raise ValueError("JWT_SECRET must be set in production")
         return v
 
+
+# Initialize secrets from GCP if needed (before creating settings)
+_use_sm = os.getenv("USE_SECRET_MANAGER", "false").lower() == "true"
+if _use_sm:
+    try:
+        from backend.core.config.secrets import initialize_secrets
+        secret_info = initialize_secrets()
+        print(f"✓ Loaded secrets from GCP Secret Manager: {secret_info}")
+    except Exception as e:
+        print(f"⚠ Warning: Failed to load secrets from GCP: {e}")
+        print("  Falling back to environment variables")
 
 settings = AppSettings()
