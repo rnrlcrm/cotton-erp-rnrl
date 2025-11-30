@@ -1,11 +1,13 @@
 from __future__ import annotations
 
-from typing import AsyncGenerator
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from typing import AsyncGenerator, Optional
+from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 import redis.asyncio as redis
 
 from backend.core.audit import audit_log
+from backend.core.auth.capabilities.decorators import RequireCapability
+from backend.core.auth.capabilities.definitions import Capabilities
 from backend.db.async_session import get_db
 from backend.app.middleware.rate_limit import limiter
 from backend.core.security.account_lockout import AccountLockoutService
@@ -57,8 +59,14 @@ def health() -> dict:
 
 
 @router.post("/auth/signup", response_model=UserOut, tags=["auth"])
-async def signup(payload: SignupRequest, request: Request = None, db: AsyncSession = Depends(get_db)) -> UserOut:
-    """Generic signup - password policy NOT enforced here. Use /auth/signup-internal for INTERNAL users."""
+async def signup(
+    payload: SignupRequest,
+    request: Request = None,
+    db: AsyncSession = Depends(get_db),
+    idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key"),
+    _check: None = Depends(RequireCapability(Capabilities.AUTH_CREATE_ACCOUNT))
+) -> UserOut:
+    """Generic signup - password policy NOT enforced here. Use /auth/signup-internal for INTERNAL users. Requires AUTH_CREATE_ACCOUNT capability. Supports idempotency."""
     svc = AuthService(db)
     try:
         user = await svc.signup(payload.email, payload.password, payload.full_name)
@@ -80,9 +88,11 @@ async def signup(payload: SignupRequest, request: Request = None, db: AsyncSessi
 async def signup_internal(
     payload: InternalUserSignupRequest,
     request: Request = None,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key"),
+    _check: None = Depends(RequireCapability(Capabilities.AUTH_CREATE_ACCOUNT))
 ) -> UserOut:
-    """Signup for INTERNAL users with enforced password policy."""
+    """Signup for INTERNAL users with enforced password policy. Requires AUTH_CREATE_ACCOUNT capability. Supports idempotency."""
     svc = AuthService(db)
     try:
         user = await svc.signup(payload.email, payload.password, payload.full_name)
@@ -105,8 +115,11 @@ async def login(
     payload: LoginRequest,
     request: Request = None,
     db: AsyncSession = Depends(get_db),
-    redis_client: redis.Redis = Depends(get_redis)
+    redis_client: redis.Redis = Depends(get_redis),
+    idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key"),
+    _check: None = Depends(RequireCapability(Capabilities.AUTH_LOGIN))
 ) -> TokenResponse | LoginWith2FAResponse:
+    """Login for INTERNAL users with password. EXTERNAL users must use OTP. Requires AUTH_LOGIN capability. Supports idempotency."""
     from backend.modules.settings.repositories.settings_repositories import UserRepository
     from backend.core.auth.jwt import create_token
     from backend.core.settings.config import settings as app_settings
@@ -214,10 +227,11 @@ async def refresh(token: str, db: AsyncSession = Depends(get_db)) -> TokenRespon
 async def change_password(
     payload: ChangePasswordRequest,
     current_user = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key")
 ) -> dict:
     """
-    Change password for authenticated INTERNAL user.
+    Change password for authenticated INTERNAL user. Supports idempotency.
     Revokes all sessions after password change for security.
     """
     from backend.core.auth.passwords import PasswordHasher
@@ -271,10 +285,11 @@ async def logout(token: str, db: AsyncSession = Depends(get_db)) -> dict:
 @router.post("/auth/logout-all", tags=["auth"])
 async def logout_all_devices(
     current_user = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key")
 ) -> dict:
     """
-    Logout user from all devices by revoking all refresh tokens.
+    Logout user from all devices by revoking all refresh tokens. Supports idempotency.
     Useful for security incidents or when user wants to terminate all sessions.
     """
     svc = AuthService(db)
@@ -298,10 +313,12 @@ async def logout_all_devices(
 async def send_otp_for_external_user(
     payload: SendOTPRequest,
     request: Request = None,
-    redis_client: redis.Redis = Depends(get_redis)
+    redis_client: redis.Redis = Depends(get_redis),
+    idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key"),
+    _check: None = Depends(RequireCapability(Capabilities.AUTH_LOGIN))
 ) -> OTPResponse:
     """
-    Send OTP to EXTERNAL user's mobile number for authentication.
+    Send OTP to EXTERNAL user's mobile number for authentication. Requires AUTH_LOGIN capability. Supports idempotency.
     
     EXTERNAL users (business partners and sub-users) authenticate via mobile OTP only.
     INTERNAL users (backoffice) must use email/password login.
@@ -342,10 +359,12 @@ async def verify_otp_for_external_user(
     payload: VerifyOTPRequest,
     request: Request = None,
     redis_client: redis.Redis = Depends(get_redis),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key"),
+    _check: None = Depends(RequireCapability(Capabilities.AUTH_LOGIN))
 ) -> TokenResponse:
     """
-    Verify OTP and login EXTERNAL user (business partner or sub-user).
+    Verify OTP and login EXTERNAL user (business partner or sub-user). Requires AUTH_LOGIN capability. Supports idempotency.
     
     Returns JWT tokens for authenticated session.
     User must exist in database (created during partner onboarding or as sub-user).
@@ -456,9 +475,11 @@ def me(user=Depends(get_current_user)) -> UserOut:  # noqa: ANN001
 async def create_sub_user(
     payload: CreateSubUserRequest,
     user=Depends(get_current_user),  # noqa: ANN001
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key"),
+    _check: None = Depends(RequireCapability(Capabilities.ORG_MANAGE_USERS))
 ) -> SubUserOut:
-    """Create a sub-user (max 2 per parent). Sub-users login via mobile OTP or PIN."""
+    """Create a sub-user (max 2 per parent). Sub-users login via mobile OTP or PIN. Requires ORG_MANAGE_USERS capability. Supports idempotency."""
     svc = AuthService(db)
     try:
         sub_user = await svc.create_sub_user(
@@ -514,9 +535,11 @@ async def list_sub_users(
 async def delete_sub_user(
     sub_user_id: str,
     user=Depends(get_current_user),  # noqa: ANN001
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key"),
+    _check: None = Depends(RequireCapability(Capabilities.ORG_MANAGE_USERS))
 ):
-    """Delete a sub-user (only your own sub-users)."""
+    """Delete a sub-user (only your own sub-users). Requires ORG_MANAGE_USERS capability. Supports idempotency."""
     svc = AuthService(db)
     try:
         await svc.delete_sub_user(str(user.id), sub_user_id)
@@ -530,9 +553,11 @@ async def delete_sub_user(
 async def disable_sub_user(
     sub_user_id: str,
     user=Depends(get_current_user),  # noqa: ANN001
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key"),
+    _check: None = Depends(RequireCapability(Capabilities.ORG_MANAGE_USERS))
 ) -> SubUserOut:
-    """Disable a sub-user (only your own sub-users)."""
+    """Disable a sub-user (only your own sub-users). Requires ORG_MANAGE_USERS capability. Supports idempotency."""
     svc = AuthService(db)
     try:
         sub_user = await svc.disable_sub_user(str(user.id), sub_user_id)
@@ -557,9 +582,11 @@ async def disable_sub_user(
 async def enable_sub_user(
     sub_user_id: str,
     user=Depends(get_current_user),  # noqa: ANN001
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key"),
+    _check: None = Depends(RequireCapability(Capabilities.ORG_MANAGE_USERS))
 ) -> SubUserOut:
-    """Enable a sub-user (only your own sub-users)."""
+    """Enable a sub-user (only your own sub-users). Requires ORG_MANAGE_USERS capability. Supports idempotency."""
     svc = AuthService(db)
     try:
         sub_user = await svc.enable_sub_user(str(user.id), sub_user_id)
@@ -588,9 +615,10 @@ async def enable_sub_user(
 async def setup_2fa(
     payload: Setup2FARequest,
     user=Depends(get_current_user),  # noqa: ANN001
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key")
 ) -> TwoFAStatusResponse:
-    """Enable 2FA and set PIN for the authenticated user."""
+    """Enable 2FA and set PIN for the authenticated user. Supports idempotency."""
     svc = AuthService(db)
     try:
         await svc.setup_2fa(str(user.id), payload.pin)
@@ -607,9 +635,11 @@ async def setup_2fa(
 @router.post("/auth/2fa-verify", response_model=TokenResponse, tags=["auth", "2fa"])
 async def verify_2fa(
     payload: Verify2FARequest,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key"),
+    _check: None = Depends(RequireCapability(Capabilities.AUTH_LOGIN))
 ) -> TokenResponse:
-    """Verify 2FA PIN and issue tokens."""
+    """Verify 2FA PIN and issue tokens. Requires AUTH_LOGIN capability. Supports idempotency."""
     svc = AuthService(db)
     try:
         access, refresh, expires_in = await svc.verify_pin(payload.email, payload.pin)
@@ -623,9 +653,10 @@ async def verify_2fa(
 @router.post("/auth/2fa-disable", response_model=TwoFAStatusResponse, tags=["auth", "2fa"])
 async def disable_2fa(
     user=Depends(get_current_user),  # noqa: ANN001
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key")
 ) -> TwoFAStatusResponse:
-    """Disable 2FA for the authenticated user."""
+    """Disable 2FA for the authenticated user. Supports idempotency."""
     svc = AuthService(db)
     try:
         await svc.disable_2fa(str(user.id))
