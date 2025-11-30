@@ -24,6 +24,7 @@ from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.core.events.emitter import EventEmitter
+from backend.core.resilience.circuit_breaker import api_circuit_breaker
 from backend.modules.partners.enums import (
     AmendmentType,
     BusinessEntityType,
@@ -72,9 +73,13 @@ class GSTVerificationService:
     def __init__(self):
         pass
     
+    @api_circuit_breaker  # 3 retries, 60s timeout, exponential backoff
     async def verify_gstin(self, gstin: str) -> GSTVerificationResult:
         """
         Verify GSTIN and fetch business details from GSTN API.
+        
+        **Circuit Breaker**: Auto-retry on failure (3 attempts, exponential backoff).
+        If GSTN API is down, fail fast after 3 retries to prevent cascade failures.
         
         Args:
             gstin: 15-character GSTIN
@@ -126,9 +131,12 @@ class GSTVerificationService:
             compliance_rating="Good"
         )
     
+    @api_circuit_breaker  # 3 retries, 60s timeout, exponential backoff
     async def search_other_gstins(self, pan: str) -> List[str]:
         """
         Search for other GSTINs registered under same PAN.
+        
+        **Circuit Breaker**: Auto-retry on failure to prevent cascade failures.
         
         Useful for businesses with multiple state registrations.
         

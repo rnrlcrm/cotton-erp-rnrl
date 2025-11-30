@@ -15,7 +15,7 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.core.auth.dependencies import get_current_user, require_permissions
@@ -86,12 +86,19 @@ def get_seller_id_from_user(user) -> UUID:
     response_model=RequirementResponse,
     status_code=status.HTTP_201_CREATED,
     summary="Create new requirement",
-    description="Post new procurement requirement with 12-step AI pipeline"
+    description="""Post new procurement requirement with 12-step AI pipeline.
+    
+    **Idempotency**: Supply `Idempotency-Key` header to prevent duplicate requirements.
+    - Same key within 24h returns cached response (no duplicate created)
+    - Use UUID or unique transaction ID as idempotency key
+    - Example: `Idempotency-Key: req-2025-11-30-abc123`
+    """
 )
 async def create_requirement(
     request: RequirementCreateRequest,
     current_user=Depends(get_current_user),
-    service: RequirementService = Depends(get_requirement_service)
+    service: RequirementService = Depends(get_requirement_service),
+    idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key")
 ):
     """
     Create new requirement posting with full AI enhancements.

@@ -8,10 +8,10 @@ Features:
 - Complete error handling
 """
 
-from typing import List
+from typing import List, Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.core.auth.dependencies import get_current_user, require_permissions
@@ -73,12 +73,19 @@ def get_buyer_id_from_user(user) -> UUID:
     response_model=AvailabilityResponse,
     status_code=status.HTTP_201_CREATED,
     summary="Create new availability",
-    description="Post new inventory availability with AI enhancements"
+    description="""Post new inventory availability with AI enhancements.
+    
+    **Idempotency**: Supply `Idempotency-Key` header to prevent duplicate postings.
+    - Same key within 24h returns cached response (no duplicate created)
+    - Use UUID or unique transaction ID as idempotency key
+    - Example: `Idempotency-Key: 550e8400-e29b-41d4-a716-446655440000`
+    """
 )
 async def create_availability(
     request: AvailabilityCreateRequest,
     current_user=Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key")
 ):
     """
     Create new availability posting.
@@ -91,6 +98,12 @@ async def create_availability(
     5. Auto-fetches delivery coordinates
     6. Creates availability (status=DRAFT)
     7. Emits availability.created event
+    
+    **Idempotency**:
+    - Middleware automatically handles `Idempotency-Key` header
+    - If duplicate key detected within 24h: returns cached response (201 → 200)
+    - No duplicate availability created
+    - Recommended for all POST operations from mobile/unreliable networks
     
     Returns: Created availability with AI enhancements
     """
