@@ -678,13 +678,17 @@ class PartnerDocumentRepository:
         await self.db.flush()
         return document
     
-    async def delete(self, document_id: UUID) -> bool:
+    async def delete(self, document_id: UUID, deleted_by: UUID) -> bool:
         """
-        Delete document.
+        Delete document permanently.
         
         Note: PartnerDocument model does not have soft delete fields.
         Documents are deleted permanently but cascade delete is controlled by
         the parent BusinessPartner relationship.
+        
+        Args:
+            document_id: Document to delete
+            deleted_by: User ID performing deletion (for audit logging)
         """
         document = await self.get_by_id(document_id)
         if not document:
