@@ -278,7 +278,7 @@ async def send_otp_for_external_user(
     else:
         full_mobile = mobile
     
-    otp_service = OTPService(redis_client)
+    otp_service = OTPService(None, redis_client)
     
     try:
         result = await otp_service.send_otp(full_mobile)
