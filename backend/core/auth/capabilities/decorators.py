@@ -48,9 +48,35 @@ class RequireCapability:
         """
         Check if current user has required capabilities.
         
+        Special handling for:
+        - PUBLIC_ACCESS: Allows unauthenticated access
+        - AUTH_LOGIN: Allows unauthenticated access (it's the login endpoint!)
+        - AUTH_CREATE_ACCOUNT: Allows unauthenticated access (for signup)
+        
         Raises:
             HTTPException: 403 Forbidden if user lacks capability
         """
+        # Get capability codes for comparison
+        cap_codes = [
+            cap.value if isinstance(cap, Capabilities) else cap 
+            for cap in self.capabilities
+        ]
+        
+        # Public capabilities that don't require authentication
+        public_capabilities = [
+            Capabilities.PUBLIC_ACCESS.value,
+            Capabilities.AUTH_LOGIN.value,
+            Capabilities.AUTH_CREATE_ACCOUNT.value,
+            "PUBLIC_ACCESS",
+            "AUTH_LOGIN",
+            "AUTH_CREATE_ACCOUNT",
+        ]
+        
+        # Check if all requested capabilities are public (don't require auth)
+        if all(cap in public_capabilities for cap in cap_codes):
+            # Public endpoint - no authentication required
+            return
+        
         if not current_user or "id" not in current_user:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
@@ -61,12 +87,16 @@ class RequireCapability:
         capability_service = CapabilityService(db)
         
         for capability in self.capabilities:
+            # Skip public capabilities in the check
+            cap_code = capability.value if isinstance(capability, Capabilities) else capability
+            if cap_code in public_capabilities:
+                continue
+                
             has_capability = await capability_service.user_has_capability(
                 user_id, capability
             )
             
             if not has_capability:
-                cap_code = capability.value if isinstance(capability, Capabilities) else capability
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail=f"Missing required capability: {cap_code}",
