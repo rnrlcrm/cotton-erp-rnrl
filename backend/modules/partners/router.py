@@ -389,7 +389,7 @@ async def reject_partner(
     """Reject partner application"""
     decision.approved = False
     
-    approval_service = ApprovalService(db, user_id, redis_client=redis_client)
+    # Check application exists before creating service
     application = await partner_service.get_application_by_id(application_id)
     
     if not application:
@@ -397,6 +397,8 @@ async def reject_partner(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Application not found"
         )
+    
+    approval_service = ApprovalService(db, user_id, redis_client=redis_client)
     
     risk_assessment = RiskAssessment(
         risk_score=application.risk_score or 0,
