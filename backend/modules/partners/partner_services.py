@@ -724,7 +724,7 @@ class ApprovalService:
                     "partner_id": str(partner.id),
                     "partner_type": partner.partner_type,
                     "legal_name": partner.legal_name,
-                    "credit_limit": float(partner.credit_limit),
+                    "credit_limit": float(partner.credit_limit) if partner.credit_limit is not None else None,
                     "approved_by": str(self.current_user_id),
                     "approved_at": partner.approved_at.isoformat()
                 },
@@ -935,11 +935,11 @@ class PartnerService:
         self.outbox_repo = OutboxRepository(db)
         
         # Initialize services
-        self.gst_service = GSTVerificationService()
-        self.geocoding_service = GeocodingService()
-        self.rto_service = RTOVerificationService()
-        self.doc_service = DocumentProcessingService()
-        self.risk_service = RiskScoringService()
+        self.gst_service = GSTVerificationService(db, redis_client)
+        self.geocoding_service = GeocodingService(db, redis_client)
+        self.rto_service = RTOVerificationService(db, redis_client)
+        self.doc_service = DocumentProcessingService(db, redis_client)
+        self.risk_service = RiskScoringService(db, redis_client)
         self.approval_service = ApprovalService(db, current_user_id, redis_client)
         self.kyc_service = KYCRenewalService(db, current_user_id, redis_client)
     
