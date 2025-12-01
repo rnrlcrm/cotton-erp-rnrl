@@ -490,7 +490,7 @@ class PartnerEmployeeRepository:
             select(PartnerEmployee).where(
                 and_(
                     PartnerEmployee.id == employee_id,
-                    PartnerEmployee.is_deleted == False
+                    PartnerEmployee.status != "deleted"
                 )
             )
         )
@@ -498,7 +498,7 @@ class PartnerEmployeeRepository:
     
     async def get_by_partner(
         self,
-        partner_id: uuid.UUID,
+        partner_id: UUID,
         status: Optional[str] = None
     ) -> List[PartnerEmployee]:
         """Get all employees for a partner"""
@@ -519,9 +519,9 @@ class PartnerEmployeeRepository:
         result = await self.db.execute(
             select(PartnerEmployee).where(
                 and_(
-                    PartnerEmployee.email == email,
-                    PartnerEmployee.business_partner_id == partner_id,
-                    PartnerEmployee.is_deleted == False
+                    PartnerEmployee.employee_email == email,
+                    PartnerEmployee.partner_id == partner_id,
+                    PartnerEmployee.status != "deleted"
                 )
             )
         )
@@ -534,9 +534,8 @@ class PartnerEmployeeRepository:
         result = await self.db.execute(
             select(func.count(PartnerEmployee.id)).where(
                 and_(
-                    PartnerEmployee.business_partner_id == partner_id,
-                    PartnerEmployee.is_active == True,
-                    PartnerEmployee.is_deleted == False
+                    PartnerEmployee.partner_id == partner_id,
+                    PartnerEmployee.status == "active"
                 )
             )
         )
@@ -579,14 +578,12 @@ class PartnerEmployeeRepository:
         return employee
     
     async def soft_delete(self, employee_id: UUID, deleted_by: UUID) -> bool:
-        """Soft delete employee - emits audit event"""
+        """Soft delete employee - emits audit event by setting status to 'deleted'"""
         employee = await self.get_by_id(employee_id)
         if not employee:
             return False
         
-        employee.is_deleted = True
-        employee.deleted_at = datetime.utcnow()
-        employee.deleted_by = deleted_by
+        employee.status = "deleted"
         
         # Emit audit event
         employee.emit_event(
@@ -645,10 +642,7 @@ class PartnerDocumentRepository:
         """Get document by ID"""
         result = await self.db.execute(
             select(PartnerDocument).where(
-                and_(
-                    PartnerDocument.id == document_id,
-                    PartnerDocument.is_deleted == False
-                )
+                PartnerDocument.id == document_id
             )
         )
         return result.scalar_one_or_none()
@@ -684,16 +678,19 @@ class PartnerDocumentRepository:
         await self.db.flush()
         return document
     
-    async def soft_delete(self, document_id: UUID, deleted_by: UUID) -> bool:
-        """Soft delete document"""
+    async def delete(self, document_id: UUID) -> bool:
+        """
+        Delete document.
+        
+        Note: PartnerDocument model does not have soft delete fields.
+        Documents are deleted permanently but cascade delete is controlled by
+        the parent BusinessPartner relationship.
+        """
         document = await self.get_by_id(document_id)
         if not document:
             return False
         
-        document.is_deleted = True
-        document.deleted_at = datetime.utcnow()
-        document.deleted_by = deleted_by
-        
+        await self.db.delete(document)
         await self.db.flush()
         return True
 
@@ -738,7 +735,7 @@ class PartnerVehicleRepository:
             select(PartnerVehicle).where(
                 and_(
                     PartnerVehicle.id == vehicle_id,
-                    PartnerVehicle.is_deleted == False
+                    PartnerVehicle.status != "deleted"
                 )
             )
         )
@@ -771,8 +768,8 @@ class PartnerVehicleRepository:
         result = await self.db.execute(
             select(PartnerVehicle).where(
                 and_(
-                    PartnerVehicle.registration_number == registration_number,
-                    PartnerVehicle.is_deleted == False
+                    PartnerVehicle.vehicle_number == registration_number,
+                    PartnerVehicle.status != "deleted"
                 )
             )
         )
@@ -792,14 +789,12 @@ class PartnerVehicleRepository:
         return vehicle
     
     async def soft_delete(self, vehicle_id: UUID, deleted_by: UUID) -> bool:
-        """Soft delete vehicle"""
+        """Soft delete vehicle by setting status to 'deleted'"""
         vehicle = await self.get_by_id(vehicle_id)
         if not vehicle:
             return False
         
-        vehicle.is_deleted = True
-        vehicle.deleted_at = datetime.utcnow()
-        vehicle.deleted_by = deleted_by
+        vehicle.status = "deleted"
         
         await self.db.flush()
         return True
