@@ -178,6 +178,7 @@ async def change_password(
     payload: ChangePasswordRequest,
     current_user = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
+    redis_client: redis.Redis = Depends(get_redis),
     idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key")
 ) -> dict:
     """
@@ -346,17 +347,6 @@ async def verify_otp_for_external_user(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=str(e)
         )
-
-
-@router.post("/auth/logout", tags=["auth"])
-async def logout(token: str, db: AsyncSession = Depends(get_db)) -> dict:
-    svc = AuthService(db)
-    try:
-        await svc.logout(token)
-    except ValueError:
-        pass
-    audit_log("user.logout", None, "refresh_token", None, {})
-    return {"message": "Logged out successfully"}
 
 
 @router.get("/auth/me", response_model=UserOut, tags=["auth"])
