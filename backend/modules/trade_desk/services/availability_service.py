@@ -1056,50 +1056,60 @@ class AvailabilityService:
         """
         from sqlalchemy import select
         
-        # Check if location exists
+        # Check if location exists in settings_locations table
         location_result = await self.db.execute(
             select(Location).where(Location.id == location_id)
         )
         location = location_result.scalar_one_or_none()
         
         if not location:
-            raise ValueError(f"Location {location_id} does not exist")
+            raise ValueError(
+                f"Location {location_id} does not exist in settings_locations table. "
+                "Please create the location first or use ad-hoc location with coordinates."
+            )
         
-        # No further validation - all sellers can sell from any location
-        pass
+        # Validation passed - all sellers can sell from any registered location
+        return None
     
     async def _get_delivery_coordinates(
         self,
         location_id: UUID
     ) -> Dict[str, Any]:
         """
-        Get delivery coordinates from location.
+        Get delivery coordinates from location master.
         
         Args:
             location_id: Location UUID
         
         Returns:
             {
-                "latitude": Decimal,
-                "longitude": Decimal,
-                "region": str (WEST, SOUTH, etc.)
+                "latitude": Decimal or None,
+                "longitude": Decimal or None,
+                "region": str or None
             }
         """
         from sqlalchemy import select
+        from decimal import Decimal as D
         
-        # Query location from database
+        # Query location from settings_locations table
         location_result = await self.db.execute(
             select(Location).where(Location.id == location_id)
         )
         location = location_result.scalar_one_or_none()
         
         if not location:
+            # Return empty dict if location not found
             return {}
         
+        # Extract coordinates with proper type conversion
+        latitude = D(str(location.latitude)) if location.latitude is not None else None
+        longitude = D(str(location.longitude)) if location.longitude is not None else None
+        region = getattr(location, 'region', None) or getattr(location, 'state', None)
+        
         return {
-            "latitude": location.latitude,
-            "longitude": location.longitude,
-            "region": location.region
+            "latitude": latitude,
+            "longitude": longitude,
+            "region": region
         }
     
     async def _get_location_country(
@@ -1117,19 +1127,31 @@ class AvailabilityService:
         """
         from sqlalchemy import select
         
-        # Query location from database
+        # Query location from settings_locations table
         location_result = await self.db.execute(
             select(Location).where(Location.id == location_id)
         )
         location = location_result.scalar_one_or_none()
         
         if not location:
-            return "India"  # Default to India if location not found
+            # Default to India if location not found (most common case)
+            return "India"
         
-        # Return country from location
-        # Note: Location model may have country, state, region fields
-        # Defaulting to "India" for now as most locations are in India
-        return getattr(location, "country", "India")
+        # Try to get country from location model
+        # Location model may have: country, country_code, or derive from region
+        country = getattr(location, "country", None)
+        
+        if not country:
+            # Fallback: derive from country_code or default to India
+            country_code = getattr(location, "country_code", None)
+            if country_code == "IN" or country_code == "IND":
+                country = "India"
+            elif country_code == "US" or country_code == "USA":
+                country = "United States"
+            else:
+                country = "India"  # Default fallback
+        
+        return country
     
     async def _validate_quality_params(
         self,

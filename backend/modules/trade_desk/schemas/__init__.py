@@ -169,12 +169,7 @@ class AvailabilityCreateRequest(BaseModel):
                         }
                     }
                 }
-            ],
-                "market_visibility": "PUBLIC",
-                "allow_partial_order": True,
-                "min_order_quantity": 10.0,
-                "delivery_terms": "Ex-gin"
-            }
+            ]
         }
 
 
@@ -250,12 +245,14 @@ class ReserveRequest(BaseModel):
     """Request schema for reserving quantity."""
     
     quantity: Decimal = Field(gt=0, description="Quantity to reserve")
+    buyer_id: UUID = Field(description="Buyer partner UUID (who is reserving)")
     reservation_hours: int = Field(24, ge=1, le=168, description="Reservation duration (default 24h)")
     
     class Config:
         json_schema_extra = {
             "example": {
                 "quantity": 50.0,
+                "buyer_id": "123e4567-e89b-12d3-a456-426614174000",
                 "reservation_hours": 24
             }
         }
