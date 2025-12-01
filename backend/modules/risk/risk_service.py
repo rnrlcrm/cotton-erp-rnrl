@@ -7,8 +7,6 @@ Integrates with:
 - WebSocket manager (risk alert broadcasting)
 """
 
-"""
-
 import json
 from decimal import Decimal
 from typing import Dict, List, Optional, Any

@@ -152,6 +152,8 @@ async def login(
             raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail=error_msg)
         elif "attempts remaining" in error_msg:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=error_msg)
+        elif "EXTERNAL users must login via mobile OTP" in error_msg:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error_msg)
         else:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=error_msg)
     except HTTPException:
@@ -278,7 +280,7 @@ async def send_otp_for_external_user(
     else:
         full_mobile = mobile
     
-    otp_service = OTPService(redis_client)
+    otp_service = OTPService(None, redis_client)
     
     try:
         result = await otp_service.send_otp(full_mobile)
@@ -334,8 +336,14 @@ async def verify_otp_for_external_user(
         return TokenResponse(access_token=access, refresh_token=refresh, expires_in=expires_in)
     
     except ValueError as e:
+        error_msg = str(e).lower()
+        if "not found" in error_msg:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=str(e)
+            )
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST if "not found" in str(e).lower() else status.HTTP_403_FORBIDDEN,
+            status_code=status.HTTP_403_FORBIDDEN,
             detail=str(e)
         )
 

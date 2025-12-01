@@ -110,7 +110,7 @@ class OutboxWorker:
             "aggregate_id": str(event.aggregate_id),
             "aggregate_type": event.aggregate_type,
             "payload": event.payload,
-            "metadata": event.metadata or {},
+            "metadata": event.event_metadata or {},
             "version": event.version,
             "outbox_id": str(event.id),
         }

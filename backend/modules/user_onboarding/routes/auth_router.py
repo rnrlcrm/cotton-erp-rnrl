@@ -15,7 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 import redis.asyncio as redis
 
 from backend.core.auth.deps import get_current_user
-from backend.core.capabilities import Capabilities, RequireCapability
+from backend.core.auth.capabilities import Capabilities, RequireCapability
 from backend.db import get_db
 from backend.app.dependencies import get_redis
 from backend.modules.user_onboarding.schemas.auth_schemas import (

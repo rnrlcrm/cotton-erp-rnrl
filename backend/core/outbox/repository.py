@@ -74,7 +74,7 @@ class OutboxRepository:
             aggregate_type=aggregate_type,
             event_type=event_type,
             payload=payload,
-            metadata=metadata,
+            event_metadata=metadata,
             topic_name=topic_name,
             idempotency_key=idempotency_key,
             version=version,

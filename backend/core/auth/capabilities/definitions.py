@@ -23,6 +23,11 @@ class Capabilities(str, Enum):
     AUTH_RESET_PASSWORD = "AUTH_RESET_PASSWORD"
     AUTH_VERIFY_EMAIL = "AUTH_VERIFY_EMAIL"
     AUTH_MANAGE_SESSIONS = "AUTH_MANAGE_SESSIONS"
+    AUTH_CREATE_ACCOUNT = "AUTH_CREATE_ACCOUNT"
+    AUTH_UPDATE_PROFILE = "AUTH_UPDATE_PROFILE"
+    
+    # ==================== PUBLIC ACCESS ====================
+    PUBLIC_ACCESS = "PUBLIC_ACCESS"  # Unauthenticated access for public endpoints
     
     # ==================== ORGANIZATION MODULE ====================
     ORG_CREATE = "ORG_CREATE"
@@ -90,6 +95,7 @@ class Capabilities(str, Enum):
     MATCHING_APPROVE_MATCH = "MATCHING_APPROVE_MATCH"
     MATCHING_REJECT_MATCH = "MATCHING_REJECT_MATCH"
     MATCHING_CONFIGURE_RULES = "MATCHING_CONFIGURE_RULES"
+    MATCHING_MANUAL = "MATCHING_MANUAL"  # Manual matching operations
     
     # ==================== ADMIN CAPABILITIES ====================
     ADMIN_MANAGE_USERS = "ADMIN_MANAGE_USERS"
@@ -106,6 +112,7 @@ class Capabilities(str, Enum):
     SYSTEM_EXPORT_DATA = "SYSTEM_EXPORT_DATA"
     SYSTEM_IMPORT_DATA = "SYSTEM_IMPORT_DATA"
     SYSTEM_VIEW_AUDIT_TRAIL = "SYSTEM_VIEW_AUDIT_TRAIL"
+    SYSTEM_CONFIGURE = "SYSTEM_CONFIGURE"  # Configure system settings
 
 
 # Capability metadata for documentation and UI

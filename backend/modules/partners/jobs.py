@@ -151,7 +151,7 @@ async def monthly_risk_recalculation_job(
     
     This helps identify partners whose risk profile has changed
     """
-    from backend.modules.partners.services import RiskScoringService
+    from backend.modules.partners.partner_services import RiskScoringService
     
     # Get all active partners
     query = select(BusinessPartner).where(

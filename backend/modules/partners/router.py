@@ -50,7 +50,12 @@ from backend.modules.partners.schemas import (
     PartnerVehicleResponse,
     VehicleData,
 )
-from backend.modules.partners import services as partner_services
+from backend.modules.partners.partner_services import (
+    PartnerService,
+    ApprovalService,
+    KYCRenewalService,
+    DocumentProcessingService,
+)
 from backend.modules.partners.services.analytics import PartnerAnalyticsService
 from backend.modules.partners.services.documents import PartnerDocumentService
 from backend.modules.partners.repositories import (
@@ -90,10 +95,10 @@ def get_partner_service(
     db: AsyncSession = Depends(get_db),
     redis_client: redis.Redis = Depends(get_redis),
     current_user = Depends(get_current_user)
-) -> partner_services.PartnerService:
+) -> PartnerService:
     """Get PartnerService instance with dependencies"""
     event_emitter = EventEmitter(db)
-    return partner_services.PartnerService(
+    return PartnerService(
         db=db,
         event_emitter=event_emitter,
         current_user_id=current_user.id,
@@ -188,7 +193,7 @@ async def upload_document(
     application_id: UUID,
     document_type: str,
     file: UploadFile = File(...),
-    partner_service: partner_services.PartnerService = Depends(get_partner_service),
+    partner_service: PartnerService = Depends(get_partner_service),
     organization_id: UUID = Depends(get_current_organization_id),
     idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key"),
     _check: None = Depends(RequireCapability(Capabilities.PARTNER_CREATE)),
@@ -198,7 +203,7 @@ async def upload_document(
     file_url = f"https://storage.example.com/{file.filename}"
     
     # Extract data using OCR
-    doc_service = partner_services.DocumentProcessingService()
+    doc_service = DocumentProcessingService()
     
     if document_type == "GST_CERTIFICATE":
         extracted_data = await doc_service.extract_gst_certificate(file_url)
@@ -325,7 +330,7 @@ async def approve_partner(
     _check: None = Depends(RequireCapability(Capabilities.PARTNER_APPROVE)),
 ):
     """Approve partner application (manager/director only)"""
-    approval_service = partner_services.ApprovalService(db, user_id, redis_client=redis_client)
+    approval_service = ApprovalService(db, user_id, redis_client=redis_client)
     
     # Get application
     application = await partner_service.get_application_by_id(application_id)
@@ -373,7 +378,6 @@ async def approve_partner(
     """
 )
 async def reject_partner(
-async def reject_partner(
     application_id: UUID,
     decision: ApprovalDecision,
     partner_service: PartnerService = Depends(get_partner_service),
@@ -385,12 +389,16 @@ async def reject_partner(
     """Reject partner application"""
     decision.approved = False
     
-    approval_service = partner_services.ApprovalService(db, user_id, redis_client=redis_client)
+    # Check application exists before creating service
     application = await partner_service.get_application_by_id(application_id)
+    
+    if not application:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Application not found"
         )
+    
+    approval_service = ApprovalService(db, user_id, redis_client=redis_client)
     
     risk_assessment = RiskAssessment(
         risk_score=application.risk_score or 0,
@@ -427,7 +435,7 @@ async def list_partners(
     status: Optional[PartnerStatus] = None,
     kyc_status: Optional[KYCStatus] = None,
     search: Optional[str] = None,
-    partner_service: partner_services.PartnerService = Depends(get_partner_service)
+    partner_service: PartnerService = Depends(get_partner_service)
 ):
     """List all partners with filters (auto-isolated by organization)"""
     partners = await partner_service.list_all_partners(
@@ -449,7 +457,7 @@ async def list_partners(
 )
 async def get_partner(
     partner_id: UUID,
-    partner_service: partner_services.PartnerService = Depends(get_partner_service)
+    partner_service: PartnerService = Depends(get_partner_service)
 ):
     """Get partner details by ID"""
     partner = await partner_service.get_partner_by_id(partner_id)
@@ -470,7 +478,7 @@ async def get_partner(
 )
 async def get_partner_locations(
     partner_id: UUID,
-    partner_service: partner_services.PartnerService = Depends(get_partner_service)
+    partner_service: PartnerService = Depends(get_partner_service)
 ):
     """Get all locations for a partner"""
     locations = await partner_service.get_partner_locations(partner_id)
@@ -512,9 +520,7 @@ async def add_partner_location(
     - GST validation for branches (PAN matching)
     - Partner type validation for ship-to
     """
-    from backend.modules.partners.services import GeocodingService, GSTVerificationService
-    
-    from backend.modules.partners.services import GeocodingService, GSTVerificationService
+    from backend.modules.partners.partner_services import GeocodingService, GSTVerificationService
     
     # Verify partner exists
     partner = await partner_service.get_partner_by_id(partner_id)
@@ -576,9 +582,6 @@ async def add_partner_location(
     geocode_result = await geocoding.geocode_address(full_address)
     
     if not geocode_result or geocode_result.get("confidence", 0) < 50:
-    geocode_result = await geocoding.geocode_address(full_address)
-    
-    if not geocode_result or geocode_result.get("confidence", 0) < 50:
         raise HTTPException(
             status_code=400,
             detail="Could not verify address via Google Maps. Please check address details."
@@ -607,16 +610,22 @@ async def add_partner_location(
         status="active"
     )
     
-    # Emit event
-    emitter = EventEmitter()d,
-        location_id=location.id,
-        location_type=location_data.location_type,
-        location_name=location_data.location_name,
-        added_by=current_user.id,
-        google_maps_tagged=True,
-        latitude=location.latitude,
-        longitude=location.longitude
-    ))
+    # TODO: PartnerLocation doesn't have EventMixin - event emission disabled
+    # Once EventMixin is added to PartnerLocation model, uncomment:
+    # location.emit_event(
+    #     event_type="partner.location.added",
+    #     user_id=current_user.id,
+    #     data={
+    #         "location_id": str(location.id),
+    #         "partner_id": str(partner_id),
+    #         "location_type": location_data.location_type,
+    #         "location_name": location_data.location_name,
+    #         "google_maps_tagged": True,
+    #         "latitude": location.latitude,
+    #         "longitude": location.longitude
+    #     }
+    # )
+    # await location.flush_events(db)
     
     return location
 
@@ -628,7 +637,7 @@ async def add_partner_location(
 )
 async def get_partner_employees(
     partner_id: UUID,
-    partner_service: partner_services.PartnerService = Depends(get_partner_service)
+    partner_service: PartnerService = Depends(get_partner_service)
 ):
     """Get all employees for a partner"""
     employees = await partner_service.get_partner_employees(partner_id)
@@ -643,7 +652,7 @@ async def get_partner_employees(
 async def get_partner_documents(
     partner_id: UUID,
     document_type: Optional[str] = None,
-    partner_service: partner_services.PartnerService = Depends(get_partner_service)
+    partner_service: PartnerService = Depends(get_partner_service)
 ):
     """Get all documents for a partner"""
     documents = await partner_service.get_partner_documents(partner_id)
@@ -657,7 +666,7 @@ async def get_partner_documents(
 )
 async def get_partner_vehicles(
     partner_id: UUID,
-    partner_service: partner_services.PartnerService = Depends(get_partner_service)
+    partner_service: PartnerService = Depends(get_partner_service)
 ):
     """Get all vehicles for a transporter partner"""
     vehicles = await partner_service.get_partner_vehicles(partner_id)
@@ -747,7 +756,7 @@ async def get_expiring_kyc_partners(
     organization_id: UUID = Depends(get_current_organization_id)
 ):
     """Get partners with KYC expiring soon"""
-    kyc_service = partner_services.KYCRenewalService(db, UUID("00000000-0000-0000-0000-000000000000"), redis_client=redis_client)
+    kyc_service = KYCRenewalService(db, UUID("00000000-0000-0000-0000-000000000000"), redis_client=redis_client)
     partners = await kyc_service.check_kyc_expiry(organization_id, days)
     return partners
 
@@ -772,7 +781,7 @@ async def initiate_kyc_renewal(
     _check: None = Depends(RequireCapability(Capabilities.PARTNER_UPDATE)),
 ):
     """Initiate KYC renewal for partner"""
-    kyc_service = partner_services.KYCRenewalService(db, user_id, redis_client=redis_client)
+    kyc_service = KYCRenewalService(db, user_id, redis_client=redis_client)
     
     try:
         # Service already handles commit
@@ -812,7 +821,7 @@ async def complete_kyc_renewal(
     _check: None = Depends(RequireCapability(Capabilities.PARTNER_UPDATE)),
 ):
     """Complete KYC renewal with new documents"""
-    kyc_service = partner_services.KYCRenewalService(db, user_id, redis_client=redis_client)
+    kyc_service = KYCRenewalService(db, user_id, redis_client=redis_client)
     
     try:
         partner = await kyc_service.complete_kyc_renewal(
@@ -876,6 +885,10 @@ async def add_vehicle(
     )
     
     return new_vehicle
+
+
+@router.get(
+    "/",
     response_model=Dict[str, Any],
     summary="List Partners with Advanced Filters",
     description="""
@@ -1028,14 +1041,6 @@ async def export_partners(
     description="Generate PDF with complete partner KYC details for record keeping"
 )
 async def download_kyc_register(
-    partner_id: UUID,
-    db: AsyncSession = Depends(get_db),
-    user_id: UUID = Depends(get_current_user_id),
-    organization_id: UUID = Depends(get_current_organization_id)
-):
-    """Generate and download complete KYC register PDF"""
-    from fastapi.responses import StreamingResponse
-    from reportlab.lib.pagesizes import A4
     partner_id: UUID,
     partner_service: PartnerService = Depends(get_partner_service),
     db: AsyncSession = Depends(get_db),

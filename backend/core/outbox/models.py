@@ -61,7 +61,7 @@ class EventOutbox(Base):
     
     # Event payload
     payload = Column(JSONB, nullable=False)  # Full event data
-    metadata = Column(JSONB, nullable=True)  # Event metadata (user_id, ip, trace_id, etc.)
+    event_metadata = Column(JSONB, nullable=True)  # Renamed from 'metadata' to avoid SQLAlchemy conflict
     
     # Publishing status
     status = Column(

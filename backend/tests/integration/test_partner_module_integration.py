@@ -31,7 +31,7 @@ from backend.modules.partners.models import (
     PartnerVehicle,
     PartnerKYCRenewal,
 )
-from backend.modules.partners.services import (
+from backend.modules.partners.partner_services import (
     PartnerService,
     ApprovalService,
     KYCRenewalService,
