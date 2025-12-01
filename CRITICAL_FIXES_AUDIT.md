@@ -726,26 +726,369 @@ availability.quantity_in_base_unit = unit_validation["quantity_in_base_unit"]
 
 ---
 
-## 📊 SUMMARY (UPDATED)
+### **ISSUE #12: Risk Engine Uses Role-Based, Not Capability-Based** ❌
 
-**Total Issues:** 11 critical  
-**Estimated Fix Time:** 7-8 hours  
-**Files to Modify:** 16 files  
-**Database Changes:** 4 columns added + 1 new table + 1 migration  
+**Current State:**
+- Risk engine references `buyer_partner_id`, `seller_id`, `BUYER`, `SELLER` hardcoded
+- No capability checks in risk_engine.py or risk_service.py
 
-**Priority:**
-1. 🔴 HIGH: Capability-based auth (#1)
-2. 🔴 HIGH: EOD square-off (#2, #3, #8 - timezone)
-3. 🔴 HIGH: Parameter validation (#10)
-4. 🔴 HIGH: Unit conversion validation (#11)
-5. 🟡 MEDIUM: Circular trading logic (#4)
-6. 🟡 MEDIUM: Mandatory payment terms (#5)
-7. 🟡 MEDIUM: Buyer preferences (#9)
-8. 🟢 LOW: Naming/UX (#6, #7)
+**Expected State:**
+- Risk engine should use partner_id generically
+- Capability-based access in risk routes (if any)
+- Risk assessment based on partner capabilities, not roles
+
+**Files to Update:**
+- `backend/modules/risk/risk_engine.py` - Remove role-based terminology
+- `backend/modules/risk/risk_service.py` - Use generic partner_id
+- Risk routes (if exist) - Add `@RequireCapability` decorators
 
 ---
 
-## ✅ FINAL IMPLEMENTATION CHECKLIST
+### **ISSUE #13: Risk Engine Must Run AFTER Creation, BEFORE Matching** ❌
+
+**Current State:**
+```python
+# In requirement_service.py:
+1. Create requirement in DB
+2. Emit requirement.created event
+3. Matching service triggered immediately → finds matches ❌ WRONG
+4. Risk check happens somewhere (unclear when)
+```
+
+**CORRECT Sequential Flow:**
+```python
+1. Validate input data
+2. Create requirement/availability in DB
+3. 🔥 RUN RISK ENGINE (comprehensive check on saved entity)
+4. If FAIL → Mark as BLOCKED/REJECTED
+5. If PASS/WARN → THEN trigger matching
+```
+
+**Why This Matters:**
+- Risk needs the entity ID to perform circular trading checks
+- Risk needs DB access to query historical trades
+- Matching should ONLY process risk-approved entities
+- Current: Matching runs in parallel with risk (race condition)
+
+**Expected State:**
+```python
+# In RequirementService.create_requirement():
+
+# STEP 1: Validate input
+validate_commodity_exists(commodity_id)
+validate_payment_terms(payment_terms)
+
+# STEP 2: Create requirement in DB
+requirement = Requirement(...)
+await self.db.add(requirement)
+await self.db.commit()
+await self.db.refresh(requirement)
+
+# STEP 3: 🔥 RUN RISK ENGINE (synchronous, blocks until complete)
+risk_result = await risk_engine.comprehensive_check(
+    entity_type="requirement",
+    entity_id=requirement.id,
+    partner_id=buyer_id,
+    estimated_value=estimated_value
+)
+
+# STEP 4: Update requirement with risk assessment
+requirement.risk_precheck_status = risk_result["status"]
+requirement.risk_precheck_score = risk_result["score"]
+requirement.risk_flags = risk_result["flags"]
+
+if risk_result["status"] == "FAIL":
+    requirement.status = "BLOCKED"
+    await self.db.commit()
+    raise RiskCheckFailedError(f"Risk check failed: {risk_result['reason']}")
+
+await self.db.commit()
+
+# STEP 5: Emit requirement.created event (AFTER risk check)
+await emit_event('requirement.created', requirement.id)
+
+# STEP 6: Trigger matching (ONLY if risk passed)
+# Matching service picks up requirement.created event
+# OR call directly:
+await matching_service.find_matches_for_requirement(requirement.id)
+```
+
+**Flow Diagram:**
+```
+User Request
+   ↓
+1. Validate inputs
+   ↓
+2. Create requirement in DB ✓
+   ↓
+3. 🔥 RISK ENGINE (synchronous)
+   ├─ Circular trading check (needs entity ID)
+   ├─ Wash trading check (needs DB queries)
+   ├─ Credit limit check
+   └─ Historical analysis
+   ↓
+   ├─ FAIL → Mark BLOCKED, Reject ❌
+   └─ PASS/WARN → Continue ✓
+   ↓
+4. Emit requirement.created event
+   ↓
+5. 🎯 MATCHING SERVICE (ONLY for approved entities)
+   ├─ Find availabilities
+   ├─ Score matches
+   └─ Create negotiations
+```
+
+**Benefits:**
+- ✅ Risk has access to entity ID for circular trading checks
+- ✅ Risk can query DB for historical trades (wash trading detection)
+- ✅ Matching ONLY processes approved entities
+- ✅ No race condition between risk and matching
+- ✅ Clear sequential flow: Create → Risk → Match
+
+**Key Design:**
+- Risk runs **synchronously** after creation (blocks user response)
+- Matching runs **after** risk approval (event-driven or direct call)
+- All business logic in services, routes just call services
+
+---
+
+### **ISSUE #14: Missing Peer-to-Peer Performance Validation Before Matching** ❌
+
+**Current State:**
+- Risk Engine checks credit limits and party links
+- NO validation of peer-to-peer historical performance
+- Matching happens without checking if buyer/seller have good track record together
+- No quality performance scoring between specific partners
+
+**Expected State:**
+Before matching buyer requirement with seller availability, system MUST check:
+
+**1. Peer-to-Peer Outstanding Amount:**
+```python
+# Check if buyer has unpaid invoices with this specific seller
+outstanding_amount = await get_outstanding_between_partners(
+    buyer_id=buyer_partner_id,
+    seller_id=seller_partner_id
+)
+
+if outstanding_amount > threshold:
+    risk_score -= 30
+    risk_factors.append(f"Buyer has ₹{outstanding_amount} outstanding with this seller")
+```
+
+**2. Buyer Payment Performance (with this specific seller):**
+```python
+# Not global payment score, but payment history with THIS seller
+peer_payment_score = await calculate_peer_payment_performance(
+    buyer_id=buyer_partner_id,
+    seller_id=seller_partner_id
+)
+# Score based on:
+# - Average days to payment (target: 0-30 days)
+# - Late payment count
+# - Disputed payment count
+# - Full vs partial payment ratio
+
+if peer_payment_score < 30:
+    risk_score -= 40
+    risk_factors.append(f"Very poor payment history with this seller: {peer_payment_score}/100")
+    # BLOCK matching with THIS seller only
+    blocked_sellers.append({
+        "seller_id": seller_partner_id,
+        "reason": f"Poor payment history ({peer_payment_score}/100)",
+        "recommendation": "Improve payment performance before trading again"
+    })
+elif peer_payment_score < 50:
+    risk_score -= 20
+    risk_factors.append(f"Below average payment history with this seller: {peer_payment_score}/100")
+    # WARN but allow matching
+    warnings.append({
+        "seller_id": seller_partner_id,
+        "severity": "WARN",
+        "message": f"Below average payment history with this seller ({peer_payment_score}/100)"
+    })
+```
+
+**3. Seller Delivery Performance (with this specific buyer):**
+```python
+# How well has THIS seller delivered to THIS buyer in past
+peer_delivery_score = await calculate_peer_delivery_performance(
+    seller_id=seller_partner_id,
+    buyer_id=buyer_partner_id
+)
+# Score based on:
+# - On-time delivery rate
+# - Quantity variance (delivered vs promised)
+# - Delivery condition/damage rate
+# - Delivery documentation completeness
+
+if peer_delivery_score < 30:
+    risk_score -= 40
+    risk_factors.append(f"Very poor delivery history with this buyer: {peer_delivery_score}/100")
+    # BLOCK matching with THIS buyer only
+    blocked_buyers.append({
+        "buyer_id": buyer_partner_id,
+        "reason": f"Poor delivery history ({peer_delivery_score}/100)",
+        "recommendation": "Improve delivery performance before trading again"
+    })
+elif peer_delivery_score < 50:
+    risk_score -= 20
+    risk_factors.append(f"Below average delivery history with this buyer: {peer_delivery_score}/100")
+    # WARN but allow matching
+    warnings.append({
+        "buyer_id": buyer_partner_id,
+        "severity": "WARN",
+        "message": f"Below average delivery history with this buyer ({peer_delivery_score}/100)"
+    })
+```
+
+**4. Quality Performance (between these two partners):**
+```python
+# Quality disputes/issues between THIS buyer-seller pair
+peer_quality_score = await calculate_peer_quality_performance(
+    buyer_id=buyer_partner_id,
+    seller_id=seller_partner_id
+)
+# Score based on:
+# - Quality dispute count
+# - Quality variance (promised vs delivered parameters)
+# - Quality claim amount/resolution
+# - Return/rejection rate
+
+if peer_quality_score < 30:
+    risk_score -= 30
+    risk_factors.append(f"Severe quality issues with this partner: {peer_quality_score}/100")
+    # BLOCK matching with THIS partner only
+    blocked_partners.append({
+        "partner_id": counterparty_id,
+        "reason": f"Severe quality issues ({peer_quality_score}/100)",
+        "recommendation": "Resolve quality disputes before trading again"
+    })
+elif peer_quality_score < 50:
+    risk_score -= 15
+    risk_factors.append(f"Quality concerns with this partner: {peer_quality_score}/100")
+    # WARN but allow matching
+    warnings.append({
+        "partner_id": counterparty_id,
+        "severity": "WARN",
+        "message": f"Quality concerns with this partner ({peer_quality_score}/100)"
+    })
+```
+
+**5. Overall Peer-to-Peer Relationship Score:**
+```python
+peer_relationship_score = (
+    peer_payment_score * 0.35 +      # 35% weight
+    peer_delivery_score * 0.30 +     # 30% weight
+    peer_quality_score * 0.25 +      # 25% weight
+    peer_dispute_resolution * 0.10   # 10% weight
+)
+
+# GRANULAR BLOCKING: Block only THIS specific partner, not all matches
+if peer_relationship_score < 30:
+    return {
+        "status": "BLOCKED_FOR_THIS_PARTNER",  # Not global FAIL
+        "peer_score": peer_relationship_score,
+        "blocked_partner_id": counterparty_id,
+        "reason": "Very poor historical relationship with this specific partner",
+        "recommendation": "Match with OTHER sellers/buyers, but NOT this one",
+        "allow_other_matches": True  # ✅ Can match with different partners
+    }
+elif peer_relationship_score < 50:
+    return {
+        "status": "WARN",
+        "peer_score": peer_relationship_score,
+        "partner_id": counterparty_id,
+        "reason": "Below average relationship with this partner",
+        "recommendation": "Proceed with caution - require manual approval"
+    }
+```
+
+**Why This Matters:**
+- A buyer may have good GLOBAL payment score but poor history with THIS seller
+- A seller may have good GLOBAL delivery score but failed THIS buyer before
+- **GRANULAR BLOCKING:** Block matching with specific bad partner, allow others
+- Prevents matching partners who have history of disputes
+- Protects both parties from repeat bad experiences
+
+**Matching Behavior:**
+```python
+# Example: Buyer has 30% payment score with Seller A, 85% with Seller B
+
+# ❌ BLOCKED: Buyer requirement + Seller A availability (peer score < 30)
+# ✅ ALLOWED: Buyer requirement + Seller B availability (good peer score)
+# ✅ ALLOWED: Buyer requirement + Seller C availability (no history, global score used)
+
+# Result: Buyer can still trade with OTHER sellers, just not Seller A
+```
+
+**Implementation Location:**
+```python
+# In MatchingService.find_matches():
+
+# STEP 1: Find potential matches (commodity, quantity, price, quality)
+potential_matches = await query_availabilities_for_requirement(requirement)
+
+# STEP 2: Filter by peer-to-peer performance
+for availability in potential_matches:
+    # 🔥 Check peer relationship for each potential match
+    peer_check = await risk_engine.assess_peer_relationship(
+        buyer_partner_id=requirement.buyer_partner_id,
+        seller_partner_id=availability.seller_partner_id,
+        commodity_id=requirement.commodity_id
+    )
+    
+    if peer_check["status"] == "BLOCKED_FOR_THIS_PARTNER":
+        # Skip this specific seller, continue with other matches
+        logger.info(f"Skipping match with seller {availability.seller_partner_id}: {peer_check['reason']}")
+        continue  # ✅ Try next seller
+    
+    if peer_check["status"] == "WARN":
+        # Flag for manual review but include in matches
+        match.peer_relationship_warning = peer_check["reason"]
+        match.requires_manual_approval = True
+    
+    # Add to final matches list
+    filtered_matches.append(match)
+
+return filtered_matches
+```
+
+**Database Tables Needed:**
+- `trades` table (historical transactions between partners)
+- `invoices` table (payment tracking)
+- `deliveries` table (delivery performance)
+- `quality_claims` table (quality disputes)
+
+**Files to Update:**
+- `backend/modules/risk/risk_engine.py` - Add `assess_peer_relationship()` method
+- Risk check runs BEFORE matching triggers
+- Matching service filters out FAIL peer relationships
+
+---
+
+## 📊 SUMMARY (FINAL UPDATE)
+
+**Total Issues:** 14 critical  
+**Estimated Fix Time:** 10-11 hours  
+**Files to Modify:** 19 files  
+**Database Changes:** 4 columns added + 1 new table + 1 migration  
+
+**Priority:**
+1. 🔴 HIGH: Capability-based auth (#1, #12)
+2. 🔴 HIGH: Peer-to-peer validation BEFORE matching (#14 - NEW)
+3. 🔴 HIGH: Risk sequential flow (#13 - critical architecture)
+4. 🔴 HIGH: EOD square-off (#2, #3, #8 - timezone)
+5. 🔴 HIGH: Parameter validation (#10)
+6. 🔴 HIGH: Unit conversion validation (#11)
+7. 🟡 MEDIUM: Circular/wash trading (#4)
+8. 🟡 MEDIUM: Mandatory payment terms (#5)
+9. 🟡 MEDIUM: Buyer preferences (#9)
+10. 🟢 LOW: Naming/UX (#6, #7)
+
+---
+
+## ✅ FINAL IMPLEMENTATION CHECKLIST (UPDATED)
 
 ### Phase 1: Database (1 hour)
 - [ ] Add `eod_cutoff` to `availabilities` table
@@ -760,31 +1103,82 @@ availability.quantity_in_base_unit = unit_validation["quantity_in_base_unit"]
 - [ ] Create `BuyerPreference` model
 - [ ] Add timezone handling
 
-### Phase 3: Validation Logic (2 hours)
-- [ ] Add commodity parameter validation
-- [ ] Add unit conversion validation
-- [ ] Update circular trading logic (check CURRENT open positions)
-- [ ] Add capability checks
+### Phase 3: Risk Engine Refactor (3 hours) 🆕
+- [ ] **Remove role-based terminology:**
+  - [ ] Replace `buyer_data`/`seller_data` with generic `partner_a_data`/`partner_b_data`
+  - [ ] Replace `seller_id` with `partner_id` in methods
+  - [ ] Update method signatures to be role-agnostic
+- [ ] **Fix circular trading logic (CRITICAL):**
+  - [ ] Change from `func.date(created_at) == trade_date` to settlement-based
+  - [ ] Check for UNSETTLED positions (status != COMPLETED/SETTLED)
+  - [ ] Block if trying to sell commodity that hasn't been settled yet
+- [ ] **Add wash trading prevention:**
+  - [ ] Check for same-party reverse trades on same day
+  - [ ] Block: Buy from Partner A at 9am → Sell to Partner A at 10am (same day)
+  - [ ] Query both requirements and availabilities tables
+- [ ] **Add peer-to-peer relationship validation (NEW - CRITICAL):**
+  - [ ] Create `assess_peer_relationship()` method
+  - [ ] Check outstanding amount between buyer-seller pair
+  - [ ] Calculate peer payment performance (buyer's history with THIS seller)
+  - [ ] Calculate peer delivery performance (seller's history with THIS buyer)
+  - [ ] Calculate peer quality performance (quality disputes between pair)
+  - [ ] Return composite peer relationship score (0-100)
+  - [ ] FAIL if peer score < 50
+- [ ] **Create unified comprehensive_check() method:**
+  ```python
+  async def comprehensive_check(
+      entity_type: str,  # "requirement" or "availability"
+      entity_id: UUID,
+      partner_id: UUID,
+      estimated_value: Decimal,
+      counterparty_id: UUID = None  # For peer-to-peer check
+  ) -> Dict[str, Any]:
+      # Runs ALL checks:
+      # 1. Credit limit
+      # 2. Circular trading (settlement-based)
+      # 3. Wash trading (same-party same-day)
+      # 4. Party links
+      # 5. Peer-to-peer relationship (if counterparty_id provided)
+      # Returns comprehensive risk result
+  ```
+- [ ] Add RiskCheckFailedError exception
+- [ ] Update all method signatures to accept partner_id (not buyer/seller)
 
-### Phase 4: Schemas (1 hour)
+### Phase 4: Service Layer Updates (2.5 hours)
+- [ ] **RequirementService.create_requirement():**
+  - [ ] Create requirement in DB first
+  - [ ] Call risk_engine.comprehensive_check(requirement.id) SYNCHRONOUSLY
+  - [ ] Update requirement with risk results
+  - [ ] If FAIL, mark as BLOCKED and raise exception
+  - [ ] If PASS/WARN, emit requirement.created event
+  - [ ] Then trigger matching (direct call or event)
+- [ ] **AvailabilityService.create_availability():**
+  - [ ] Create availability in DB first
+  - [ ] Call risk_engine.comprehensive_check(availability.id) SYNCHRONOUSLY
+  - [ ] Update availability with risk results
+  - [ ] If FAIL, mark as BLOCKED and raise exception
+  - [ ] If PASS/WARN, emit availability.created event
+  - [ ] Then trigger matching
+- [ ] Add commodity parameter validation (in services)
+- [ ] Add unit conversion validation (in services)
+- [ ] Add buyer preference service methods
+- [ ] Update timezone-aware EOD calculation
+
+### Phase 5: Schemas (1 hour)
 - [ ] Make payment/delivery/weighment terms MANDATORY
 - [ ] Add buyer preference fields
 - [ ] Rename pricing fields
 - [ ] Add validation schemas
 
-### Phase 5: Services (2 hours)
-- [ ] Remove role-based helpers
-- [ ] Add parameter validation in AvailabilityService
-- [ ] Add unit validation in AvailabilityService
-- [ ] Add parameter validation in RequirementService
-- [ ] Add unit validation in RequirementService
-- [ ] Add buyer preference service methods
-- [ ] Update timezone-aware EOD calculation
-
 ### Phase 6: Routes (1 hour)
 - [ ] Add `@RequireCapability` to all endpoints
-- [ ] Update availability routes
-- [ ] Update requirement routes
+- [ ] **Remove ALL business logic from routes:**
+  - [ ] Routes should ONLY: validate request schema, call service method, return response
+  - [ ] No risk checks in routes
+  - [ ] No validation logic in routes
+  - [ ] No database queries in routes
+- [ ] Update availability routes (clean architecture)
+- [ ] Update requirement routes (clean architecture)
 - [ ] Add buyer preference endpoints
 
 ### Phase 7: Cron Jobs (30 mins)
@@ -792,16 +1186,132 @@ availability.quantity_in_base_unit = unit_validation["quantity_in_base_unit"]
 - [ ] Create EOD expiry job for requirements
 - [ ] Schedule jobs
 
-### Phase 8: Testing (1 hour)
+### Phase 8: Testing (1.5 hours)
 - [ ] Test capability-based auth
+- [ ] Test sequential flow: Create → Risk → Match
+- [ ] Test risk FAIL blocks matching
+- [ ] **Test peer-to-peer validation:**
+  - [ ] Test outstanding amount blocking
+  - [ ] Test poor payment history with specific seller blocks match
+  - [ ] Test poor delivery history with specific buyer blocks match
+  - [ ] Test quality dispute history affects matching
 - [ ] Test parameter validation
 - [ ] Test unit conversion validation
 - [ ] Test buyer preferences
 - [ ] Test EOD expiry
-- [ ] Test circular trading
+- [ ] Test circular + wash trading detection
 
 ---
 
-**🎯 READY FOR FINAL APPROVAL?**
+## 📊 IMPLEMENTATION STATUS (Updated: Dec 1, 2025)
 
-Type **"APPROVED"** to begin implementation.
+### ✅ COMPLETED
+
+#### 1. Routes Cleanup & Capability-Based Auth
+- ✅ **availability_routes.py**: 11 endpoints updated
+  - Removed `get_seller_id_from_user()` and `get_buyer_id_from_user()` helpers
+  - Added `@RequireCapability` decorators (TRADE_SELL, TRADE_BUY, etc.)
+  - Fixed redis_client dependency injection
+  - Deprecated POST /availabilities/search (HTTP 410 GONE)
+- ✅ **requirement_routes.py**: 10 endpoints updated
+  - Same cleanup as availability routes
+  - Deprecated POST /requirements/search (HTTP 410 GONE)
+  - Deprecated POST /requirements/search/by-intent (HTTP 410 GONE)
+- ✅ Documentation: ROUTES_CLEANUP_COMPLETE.md created
+
+#### 2. Instant Automatic Matching Implementation
+- ✅ **Architectural Change**: Moved from marketplace listing to instant matching
+  - **Old**: Users search/browse → Manual selection → Negotiation
+  - **New**: Post requirement/availability → System instantly finds matches → Notifications sent
+- ✅ **availability_service.py**: Added instant matching trigger (Step 13)
+  - Calls `MatchingService.on_availability_created()` with HIGH priority
+  - Synchronous matching after risk check passes
+  - Event-driven fallback if instant matching fails
+- ✅ **requirement_service.py**: Added instant matching trigger (Step 14)
+  - Calls `MatchingService.on_requirement_created()` with HIGH priority
+  - Instant automatic intent routing (DIRECT_BUY → Matching, NEGOTIATION → Queue, etc.)
+- ✅ **Deprecated Endpoints**: 3 marketplace search endpoints return HTTP 410 GONE
+  - POST /availabilities/search
+  - POST /requirements/search
+  - POST /requirements/search/by-intent
+- ✅ Documentation: INSTANT_MATCHING_ARCHITECTURE.md created (comprehensive)
+
+#### 3. Database Schema Updates
+- ✅ **Migration Created**: 2025_12_01_add_eod_timezone_buyer_prefs.py
+  - Added `eod_cutoff` (TIMESTAMP WITH TIME ZONE) to availabilities table
+  - Added `eod_cutoff` (TIMESTAMP WITH TIME ZONE) to requirements table
+  - Added `timezone` (VARCHAR 50) to settings_locations table
+  - Created `buyer_preferences` table with JSONB columns (payment_terms, delivery_terms, weighment_terms)
+- ✅ **Migration Applied**: `alembic upgrade head` executed successfully
+  - Current version: 2025_12_01_eod_tz (head)
+- ✅ **Merge Migration**: Created 5ac2637fb0dd_merge_migration_heads.py to resolve duplicate heads
+
+### ⏳ NEXT PRIORITIES
+
+#### Priority 1: Test Instant Matching Flow (IMMEDIATE)
+Execute test cases from INSTANT_MATCHING_TEST_PLAN.md:
+1. TC1: Buyer creates requirement → Instant match with availability
+2. TC2: Seller creates availability → Instant match with requirement
+3. TC3: Deprecated endpoints return HTTP 410 GONE
+4. TC6: Multiple matches found and ranked by score
+5. TC10: Performance test (verify < 1 second response time)
+
+**Success Criteria:**
+- ✅ Matches created instantly (< 1 second)
+- ✅ WebSocket notifications sent to both parties
+- ✅ Match scores calculated correctly (> 0.6 threshold)
+- ✅ Deprecated endpoints return proper error messages
+
+#### Priority 2: EOD Cron Jobs (HIGH)
+Implement timezone-aware expiry management:
+1. Create `backend/modules/trade_desk/cron/eod_expiry.py`
+2. Expire availabilities past their eod_cutoff
+3. Expire requirements past their eod_cutoff
+4. Use location timezone for accurate calculations
+5. Schedule cron jobs (every hour)
+
+#### Priority 3: Validation Services (MEDIUM)
+- ❌ Implement `_validate_quality_params()` in AvailabilityService
+- ❌ Implement unit conversion validation
+- ❌ Check CommodityParameter min/max values
+- ❌ Add buyer preference service methods
+
+#### Priority 4: Peer-to-Peer Validation (HIGH - BLOCKED)
+**BLOCKER**: Requires trades/invoices/deliveries table schema
+- Outstanding amount blocking
+- Payment history validation with specific sellers
+- Delivery history validation with specific buyers
+- Quality dispute history affects matching
+
+---
+
+## 🚀 KEY ARCHITECTURAL CHANGE: INSTANT MATCHING
+
+### Before (Marketplace Pattern)
+```
+Buyer → Search Availabilities → Browse Listings → Select Match → Start Negotiation
+Seller → Post Availability → Wait for Buyers to Find It → Receive Offers
+```
+
+### After (Instant Automatic Matching)
+```
+Buyer → Post Requirement → INSTANT MATCH (AI-powered) → Notifications Sent → Direct P2P
+Seller → Post Availability → INSTANT MATCH (AI-powered) → Notifications Sent → Direct P2P
+```
+
+**Benefits:**
+- ✅ Real-time matching (< 1 second)
+- ✅ No manual searching needed
+- ✅ AI-optimized matches (scoring + risk)
+- ✅ Direct peer-to-peer communication
+- ✅ No stale inventory
+- ✅ Better user experience
+
+---
+
+**🎯 IMPLEMENTATION IN PROGRESS**
+
+See INSTANT_MATCHING_ARCHITECTURE.md for complete details.
+See INSTANT_MATCHING_TEST_PLAN.md for testing strategy.
+See ROUTES_CLEANUP_COMPLETE.md for routes changes.
+```

@@ -119,12 +119,13 @@ class MatchingEngine:
         availability: Availability
     ) -> bool:
         """
-        Hard location filter - BEFORE any scoring.
+        STRICT location filter - BEFORE any scoring.
         
-        Rules (from config):
-        - BLOCK cross-state if config.ALLOW_CROSS_STATE_MATCHING = False
-        - ALLOW same-state if config.ALLOW_SAME_STATE_MATCHING = True
-        - CHECK distance if config.MAX_DISTANCE_KM is set
+        CRITICAL RULES:
+        1. State-level filtering: Maharashtra requirement → Maharashtra availability ONLY
+        2. City-level filtering: Nagpur requirement → Nagpur OR nearby cities within max_distance_km
+        3. Cross-state matching: BLOCKED by default
+        4. Distance-based: Calculate Haversine distance if lat/long available
         
         Args:
             requirement: Buyer requirement with delivery_locations JSONB
@@ -134,35 +135,119 @@ class MatchingEngine:
             True if locations compatible, False to skip immediately
         """
         # Requirement has delivery_locations as JSONB array
-        # Example: [{"location_id": "uuid", "latitude": 21.1, "longitude": 79.0, "max_distance_km": 50}]
+        # Example: [{"location_id": "uuid", "state": "Maharashtra", "city": "Nagpur", 
+        #            "latitude": 21.1, "longitude": 79.0, "max_distance_km": 50}]
         
         if not requirement.delivery_locations:
             # No location specified - match all (fallback)
             logger.warning(f"Requirement {requirement.id} has no delivery_locations")
             return True
         
+        # Get seller's location details (with eager loading)
+        seller_location = availability.location if hasattr(availability, 'location') else None
+        
+        if not seller_location:
+            logger.warning(f"Availability {availability.id} has no location details")
+            return False  # Cannot match without location
+        
         # Extract buyer's acceptable locations
         buyer_locations = requirement.delivery_locations
-        seller_location_id = availability.location_id
         
-        # Check if seller's location is in buyer's acceptable list
+        # Check each buyer location preference
         for buyer_loc in buyer_locations:
-            if buyer_loc.get("location_id") == str(seller_location_id):
-                return True  # Exact match
+            # RULE 1: Exact location ID match (highest priority)
+            if buyer_loc.get("location_id") == str(availability.location_id):
+                logger.debug(f"Exact location match: {availability.location_id}")
+                return True
+            
+            # RULE 2: State-level matching (Maharashtra → Maharashtra only)
+            buyer_state = buyer_loc.get("state")
+            seller_state = seller_location.state
+            
+            if buyer_state and seller_state:
+                if buyer_state.strip().upper() != seller_state.strip().upper():
+                    # Cross-state NOT allowed
+                    logger.debug(
+                        f"State mismatch: buyer wants {buyer_state}, "
+                        f"seller has {seller_state} - BLOCKED"
+                    )
+                    continue  # Try next buyer location
+            
+            # RULE 3: City-level matching with distance calculation
+            buyer_city = buyer_loc.get("city")
+            seller_city = seller_location.city
+            max_distance_km = buyer_loc.get("max_distance_km", self.config.MAX_DISTANCE_KM or 50)
+            
+            if buyer_city and seller_city:
+                # Exact city match (Nagpur → Nagpur)
+                if buyer_city.strip().upper() == seller_city.strip().upper():
+                    logger.debug(f"Exact city match: {seller_city}")
+                    return True
+                
+                # Nearby cities within distance (Nagpur → Wardha if within 50km)
+                buyer_lat = buyer_loc.get("latitude")
+                buyer_lon = buyer_loc.get("longitude")
+                seller_lat = seller_location.latitude
+                seller_lon = seller_location.longitude
+                
+                if all([buyer_lat, buyer_lon, seller_lat, seller_lon]):
+                    distance_km = self._calculate_haversine_distance(
+                        buyer_lat, buyer_lon, seller_lat, seller_lon
+                    )
+                    
+                    if distance_km <= max_distance_km:
+                        logger.debug(
+                            f"Distance match: {seller_city} is {distance_km:.2f}km "
+                            f"from {buyer_city} (max: {max_distance_km}km)"
+                        )
+                        return True
+                    else:
+                        logger.debug(
+                            f"Distance too far: {distance_km:.2f}km > {max_distance_km}km"
+                        )
+                        continue
         
-        # If exact match failed and cross-state not allowed, block
-        if not self.config.ALLOW_CROSS_STATE_MATCHING:
-            # Would need to check state_id from location table
-            # For now, exact location match only
-            return False
+        # No location matched buyer's criteria
+        logger.debug(
+            f"Location filter blocked: requirement {requirement.id} has no match "
+            f"with availability {availability.id} (seller location: {seller_location.city}, {seller_location.state})"
+        )
+        return False  # BLOCKED - no relevant location match
+    
+    def _calculate_haversine_distance(
+        self, lat1: float, lon1: float, lat2: float, lon2: float
+    ) -> float:
+        """
+        Calculate Haversine distance between two lat/long points.
         
-        # Distance-based matching (if configured)
-        if self.config.MAX_DISTANCE_KM:
-            # Would calculate Haversine distance
-            # Placeholder for now
-            pass
+        Returns distance in kilometers.
         
-        return False  # Default: no match
+        Formula:
+        a = sin²(Δlat/2) + cos(lat1) * cos(lat2) * sin²(Δlon/2)
+        c = 2 * atan2(√a, √(1−a))
+        d = R * c  (R = Earth's radius = 6371 km)
+        """
+        from math import radians, sin, cos, sqrt, atan2
+        
+        # Earth's radius in kilometers
+        R = 6371.0
+        
+        # Convert degrees to radians
+        lat1_rad = radians(lat1)
+        lon1_rad = radians(lon1)
+        lat2_rad = radians(lat2)
+        lon2_rad = radians(lon2)
+        
+        # Differences
+        dlat = lat2_rad - lat1_rad
+        dlon = lon2_rad - lon1_rad
+        
+        # Haversine formula
+        a = sin(dlat / 2)**2 + cos(lat1_rad) * cos(lat2_rad) * sin(dlon / 2)**2
+        c = 2 * atan2(sqrt(a), sqrt(1 - a))
+        distance = R * c
+        
+        return distance
     
     # ========================================================================
     # BIDIRECTIONAL MATCHING

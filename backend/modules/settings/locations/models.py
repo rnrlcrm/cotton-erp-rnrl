@@ -52,6 +52,13 @@ class Location(Base, EventMixin):
     # Auto-calculated Region
     region = Column(String(50), nullable=True)  # WEST, SOUTH, NORTH, CENTRAL, EAST, NORTHEAST
     
+    # Timezone (for EOD calculations)
+    timezone = Column(
+        String(50),
+        nullable=True,
+        comment='IANA timezone (e.g., Asia/Kolkata, America/New_York) for EOD cutoff calculations'
+    )
+    
     # Status
     is_active = Column(Boolean, nullable=False, default=True)
     

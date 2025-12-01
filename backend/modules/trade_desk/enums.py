@@ -17,6 +17,7 @@ class AvailabilityStatus(str, Enum):
     SOLD: Fully sold (converted to trade)
     EXPIRED: Past expiry date
     CANCELLED: Cancelled by seller
+    BLOCKED: Risk check failed (circular trading, party links, etc.)
     """
     DRAFT = "DRAFT"
     ACTIVE = "ACTIVE"
@@ -24,6 +25,7 @@ class AvailabilityStatus(str, Enum):
     SOLD = "SOLD"
     EXPIRED = "EXPIRED"
     CANCELLED = "CANCELLED"
+    BLOCKED = "BLOCKED"
 
 
 class MarketVisibility(str, Enum):
@@ -85,6 +87,7 @@ class RequirementStatus(str, Enum):
     FULFILLED: All quantity purchased
     EXPIRED: Past valid_until date
     CANCELLED: Cancelled by buyer
+    BLOCKED: Risk check failed (circular trading, party links, etc.)
     """
     DRAFT = "DRAFT"
     ACTIVE = "ACTIVE"
@@ -92,6 +95,7 @@ class RequirementStatus(str, Enum):
     FULFILLED = "FULFILLED"
     EXPIRED = "EXPIRED"
     CANCELLED = "CANCELLED"
+    BLOCKED = "BLOCKED"
 
 
 class UrgencyLevel(str, Enum):

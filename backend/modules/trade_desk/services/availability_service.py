@@ -253,29 +253,11 @@ class AvailabilityService:
         # ✅ Export requires export_allowed=True (from IEC+GST+PAN or foreign license)
         
         # ====================================================================
-        # 1B: 🚀 CIRCULAR TRADING PREVENTION
-        # Block if seller has open BUY for same commodity today
+        # 1B: Calculate estimated trade value (for risk check later)
         # ====================================================================
-        from backend.modules.risk.risk_engine import RiskEngine
-        risk_engine = RiskEngine(self.db)
-        
-        if expiry_date:
-            trade_date = expiry_date.date()
-        else:
-            trade_date = datetime.now().date()
-        
-        circular_check = await risk_engine.check_circular_trading(
-            partner_id=seller_id,
-            commodity_id=commodity_id,
-            transaction_type="SELL",
-            trade_date=trade_date
-        )
-        
-        if circular_check["blocked"]:
-            raise ValueError(
-                f"{circular_check['reason']}\n\n"
-                f"Recommendation: {circular_check['recommendation']}"
-            )
+        estimated_trade_value = None
+        if base_price and total_quantity:
+            estimated_trade_value = base_price * total_quantity
         
         # ====================================================================
         # 2A: 🚀 UNIT CONVERSION (Integrate with Commodity Master)
@@ -429,11 +411,90 @@ class AvailabilityService:
         # 9. Persist to database
         availability = await self.repo.create(availability)
         
-        # 10. Emit event
+        # ====================================================================
+        # 🔥 10. COMPREHENSIVE RISK CHECK (AFTER creation, BEFORE matching)
+        # ====================================================================
+        from backend.modules.risk.risk_engine import RiskEngine
+        from backend.modules.risk.exceptions import RiskCheckFailedError
+        
+        risk_engine = RiskEngine(self.db)
+        
+        try:
+            risk_result = await risk_engine.comprehensive_check(
+                entity_type="availability",
+                entity_id=availability.id,
+                partner_id=seller_id,
+                commodity_id=commodity_id,
+                estimated_value=estimated_trade_value or Decimal("0")
+            )
+            
+            # Update availability with risk assessment
+            availability.risk_precheck_status = risk_result["status"]
+            availability.risk_precheck_score = risk_result["score"]
+            availability.risk_flags = {
+                "risk_factors": risk_result["risk_factors"],
+                "circular_trading": risk_result["circular_trading"],
+                "wash_trading": risk_result["wash_trading"],
+                "checked_at": risk_result["checked_at"]
+            }
+            
+            await self.repo.update(availability)
+            
+        except RiskCheckFailedError as e:
+            # Risk check failed - mark availability as BLOCKED
+            availability.status = "BLOCKED"
+            availability.risk_precheck_status = "FAIL"
+            availability.risk_flags = e.risk_details
+            await self.repo.update(availability)
+            
+            # Re-raise to inform caller
+            raise ValueError(f"Risk check failed: {e.message}") from e
+        
+        # ====================================================================
+        # 11. Emit event (only if risk passed)
+        # ====================================================================
         availability.emit_created(created_by)
         
-        # 11. Flush events to event store
+        # 12. Flush events to event store
         await availability.flush_events(self.db)
+        
+        # ====================================================================
+        # 🔥 13. INSTANT AUTOMATIC MATCHING (No marketplace listing)
+        # ====================================================================
+        # Trigger instant matching - find buyers immediately
+        # This is NOT marketplace - no browsing/listing allowed
+        try:
+            from backend.modules.trade_desk.services.matching_service import MatchingService, MatchPriority
+            from backend.modules.trade_desk.matching.matching_engine import MatchingEngine
+            from backend.modules.trade_desk.matching.validators import MatchValidator
+            from backend.modules.trade_desk.config.matching_config import MatchingConfig
+            
+            # Initialize matching components
+            matching_engine = MatchingEngine(self.db)
+            validator = MatchValidator(self.db)
+            config = MatchingConfig()
+            matching_service = MatchingService(
+                db=self.db,
+                matching_engine=matching_engine,
+                validator=validator,
+                config=config,
+                redis_client=self.redis_client
+            )
+            
+            # 🔥 INSTANT MATCH - High priority (user just posted)
+            await matching_service.on_availability_created(
+                availability_id=availability.id,
+                priority=MatchPriority.HIGH  # Highest priority for instant matching
+            )
+            
+            logger.info(
+                f"Instant matching triggered for availability {availability.id} "
+                f"(seller: {seller_id}, commodity: {commodity_id})"
+            )
+            
+        except Exception as e:
+            logger.error(f"Failed to trigger instant matching for availability {availability.id}: {e}")
+            # Don't fail creation if matching fails - fallback to event-driven
         
         return availability
     

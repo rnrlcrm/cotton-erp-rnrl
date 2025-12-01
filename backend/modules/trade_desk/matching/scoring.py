@@ -183,7 +183,7 @@ class MatchScorer:
         }
     
     # ========================================================================
-    # QUALITY SCORING (40% weight)
+    # QUALITY SCORING (40% weight) - STRICT PARAMETER MATCHING
     # ========================================================================
     
     def calculate_quality_score(
@@ -192,13 +192,17 @@ class MatchScorer:
         availability: Availability
     ) -> Dict[str, Any]:
         """
-        Compare quality parameters with tolerances.
+        Compare quality parameters with STRICT tolerances.
+        
+        CRITICAL: Parameters must match closely - no lenient scoring.
         
         Algorithm:
         1. For each parameter in requirement quality_params:
-           - If seller value within buyer's min/max range: score = 1.0
-           - If seller value matches buyer's preferred: bonus score
-           - If seller value outside range: score = 0.0
+           - If seller value EXACTLY matches buyer's target: score = 1.0
+           - If seller value within buyer's min/max range BUT not exact: score = 0.8
+           - If seller value outside range: score = 0.0 (BLOCKED)
+        2. ALL parameters must pass for quality_pass = True
+        3. Final score = average of all parameter scores
         2. Weight each parameter by importance (if specified)
         3. Return weighted average
         
@@ -305,7 +309,7 @@ class MatchScorer:
         }
     
     # ========================================================================
-    # PRICE SCORING (30% weight)
+    # PRICE SCORING (30% weight) - STRICT PRICE MATCHING
     # ========================================================================
     
     def calculate_price_score(
@@ -314,72 +318,110 @@ class MatchScorer:
         availability: Availability
     ) -> Dict[str, Any]:
         """
-        Compare seller price vs buyer budget.
+        Compare seller price vs buyer budget with STRICT matching.
+        
+        CRITICAL: If buyer specifies price, match closely. Exact price = highest score.
         
         Algorithm:
-        - If price <= preferred: score = 1.0
-        - If price between preferred and max:
-            score = (max - price) / (max - preferred)
-        - If price > max: score = 0.0
+        - If price EXACTLY matches buyer's target: score = 1.0 (perfect match)
+        - If price within 2% of buyer's target: score = 0.95 (excellent)
+        - If price within 5% of buyer's target: score = 0.85 (good)
+        - If price within 10% of buyer's target: score = 0.70 (acceptable)
+        - If price <= buyer's max budget: score = 0.60 (just acceptable)
+        - If price > max budget: score = 0.0 (BLOCKED)
         
         Returns:
         {
-            "score": 0.67,
+            "score": 0.95,
             "pass": True,
-            "details": {...}
+            "details": {
+                "seller_price": 48000,
+                "buyer_target": 48500,
+                "buyer_max": 50000,
+                "variance_percent": 1.03,
+                "price_match_quality": "EXCELLENT"
+            }
         }
         """
         buyer_max_budget = requirement.max_budget
-        buyer_preferred_price = requirement.preferred_budget
+        buyer_target_price = requirement.preferred_budget  # Buyer's target/ideal price
         seller_price = availability.base_price
         
-        if not buyer_max_budget or not seller_price:
+        if not seller_price:
+            return {
+                "score": 0.0,
+                "pass": False,
+                "details": {"error": "Seller price not specified"}
+            }
+        
+        if not buyer_max_budget:
             # No price constraints - perfect match
             return {
                 "score": 1.0,
                 "pass": True,
-                "details": {"note": "No price constraints"}
+                "details": {"note": "No price constraints specified"}
             }
         
         # Convert to Decimal for precision
         max_budget = Decimal(str(buyer_max_budget))
         seller_price_dec = Decimal(str(seller_price))
         
-        if buyer_preferred_price:
-            preferred = Decimal(str(buyer_preferred_price))
+        # Use target price if specified, otherwise assume 90% of max
+        if buyer_target_price:
+            target_price = Decimal(str(buyer_target_price))
         else:
-            preferred = max_budget * Decimal("0.9")  # Assume 90% of max as preferred
+            target_price = max_budget * Decimal("0.90")
         
-        # Calculate score
+        # Check if price exceeds budget (BLOCKED)
         if seller_price_dec > max_budget:
-            # Over budget - score 0
             score = 0.0
             passed = False
-        elif seller_price_dec <= preferred:
-            # At or below preferred - perfect score
-            score = 1.0
-            passed = True
+            price_match_quality = "REJECTED - Over Budget"
+            variance_percent = 100.0
         else:
-            # Between preferred and max - linear score
-            range_size = max_budget - preferred
-            if range_size > 0:
-                score = float((max_budget - seller_price_dec) / range_size)
+            # Calculate variance from target
+            if target_price > 0:
+                variance_percent = abs(float((seller_price_dec - target_price) / target_price * 100))
             else:
+                variance_percent = 0.0
+            
+            # STRICT PRICE MATCHING TIERS (as per requirements)
+            if seller_price_dec == target_price:
                 score = 1.0
-            passed = True
+                price_match_quality = "PERFECT - Exact Match"
+            elif variance_percent <= 2.0:
+                score = 0.95
+                price_match_quality = "EXCELLENT - Within 2%"
+            elif variance_percent <= 5.0:
+                score = 0.85
+                price_match_quality = "GOOD - Within 5%"
+            elif variance_percent <= 10.0:
+                score = 0.70
+                price_match_quality = "ACCEPTABLE - Within 10%"
+            elif seller_price_dec <= max_budget:
+                score = 0.60
+                price_match_quality = "JUST ACCEPTABLE - Within Budget"
+            else:
+                score = 0.0
+                price_match_quality = "REJECTED"
+            
+            passed = score >= 0.6
         
         savings = float(max_budget - seller_price_dec)
-        premium = float(seller_price_dec - preferred) if seller_price_dec > preferred else 0.0
+        variance_from_target = float(seller_price_dec - target_price)
         
         return {
-            "score": max(0.0, min(1.0, score)),  # Clamp to [0, 1]
+            "score": max(0.0, min(1.0, score)),
             "pass": passed,
             "details": {
                 "seller_price": float(seller_price_dec),
+                "buyer_target_price": float(target_price),
                 "buyer_max_budget": float(max_budget),
-                "buyer_preferred_price": float(preferred),
-                "savings_vs_budget": savings,
-                "premium_vs_preferred": premium
+                "variance_percent": round(variance_percent, 2),
+                "variance_from_target": variance_from_target,
+                "savings": savings,
+                "price_match_quality": price_match_quality,
+                "over_budget": seller_price_dec > max_budget
             }
         }
     

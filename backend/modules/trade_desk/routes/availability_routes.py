@@ -39,35 +39,6 @@ from backend.modules.trade_desk.services import AvailabilityService
 router = APIRouter(prefix="/availabilities", tags=["Availability Engine"])
 
 
-def get_seller_id_from_user(user) -> UUID:
-    """
-    Extract seller ID from user context.
-    
-    For EXTERNAL users: business_partner_id
-    For INTERNAL users: organization acts as seller (for demo/testing)
-    """
-    if user.user_type == "EXTERNAL" and user.business_partner_id:
-        return user.business_partner_id
-    elif user.user_type == "INTERNAL" and user.organization_id:
-        # INTERNAL users can post on behalf of organization
-        # In production, this might need org-to-partner mapping
-        return user.organization_id
-    else:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="User not associated with a business partner or organization"
-        )
-
-
-def get_buyer_id_from_user(user) -> UUID:
-    """
-    Extract buyer ID from user context.
-    
-    Same logic as seller for now (users can be both buyers and sellers)
-    """
-    return get_seller_id_from_user(user)
-
-
 # ========================
 # Public REST APIs
 # ========================
@@ -90,7 +61,8 @@ async def create_availability(
     current_user=Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
     idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key"),
-    redis_client: redis.Redis = Depends(get_redis)
+    redis_client: redis.Redis = Depends(get_redis),
+    _check: None = Depends(RequireCapability(Capabilities.TRADE_SELL))
 ):
     """
     Create new availability posting.
@@ -112,7 +84,13 @@ async def create_availability(
     
     Returns: Created availability with AI enhancements
     """
-    seller_id = get_seller_id_from_user(current_user)
+    if not current_user.business_partner_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="User not associated with a business partner"
+        )
+    
+    seller_id = current_user.business_partner_id
     service = AvailabilityService(db, redis_client=redis_client)
     
     try:
@@ -151,64 +129,44 @@ async def create_availability(
 @router.post(
     "/search",
     response_model=AvailabilitySearchResponse,
-    summary="AI-powered smart search",
-    description="Multi-criteria search with AI matching"
+    summary="[DEPRECATED] AI-powered smart search - Use instant matching instead",
+    description="⚠️ DEPRECATED: This marketplace-style search is deprecated. System now uses INSTANT AUTOMATIC MATCHING. When you post a requirement, matches are found automatically in real-time.",
+    deprecated=True
 )
 async def search_availabilities(
     request: AvailabilitySearchRequest,
     current_user=Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
-    redis_client: redis.Redis = Depends(get_redis)
+    db: AsyncSession = Depends(get_db),
+    redis_client: redis.Redis = Depends(get_redis),
+    _check: None = Depends(RequireCapability(Capabilities.TRADE_BUY))
 ):
     """
-    AI-powered smart search for compatible availabilities.
+    ⚠️ DEPRECATED ENDPOINT
     
-    Features:
-    - Vector similarity matching
-    - Quality tolerance fuzzy matching
-    - Price range with tolerance
-    - Geo-spatial distance filtering
-    - Market visibility access control
-    - Ranked by match score (0.0 to 1.0)
+    This marketplace-style search is deprecated. The system now uses INSTANT AUTOMATIC MATCHING:
+    
+    **New Workflow:**
+    1. Buyer posts requirement → System instantly finds matching availabilities
+    2. Seller posts availability → System instantly finds matching requirements
+    3. Matches are sent via notifications/events (NO manual browsing needed)
+    
+    **Why this changed:**
+    - Real-time matching is faster and more efficient
+    - Prevents users from seeing stale/already-matched inventory
+    - Ensures best matches based on AI scoring and risk assessment
+    - No marketplace listing - direct peer-to-peer matching only
+    
+    **Recommendation:** 
+    Use POST /requirements instead. Matches will be delivered instantly.
     """
-    buyer_id = get_buyer_id_from_user(current_user)
-    service = AvailabilityService(db, redis_client=redis_client)
-    
-    results = await service.search_availabilities(
-        buyer_id=buyer_id,
-        commodity_id=request.commodity_id,
-        quality_params=request.quality_params,
-        quality_tolerance=request.quality_tolerance,
-        min_price=request.min_price,
-        max_price=request.max_price,
-        price_tolerance_pct=request.price_tolerance_pct,
-        location_id=request.location_id,
-        delivery_region=request.delivery_region,
-        max_distance_km=request.max_distance_km,
-        buyer_latitude=request.buyer_latitude,
-        buyer_longitude=request.buyer_longitude,
-        min_quantity=request.min_quantity,
-        allow_partial=request.allow_partial,
-        market_visibility=request.market_visibility,
-        exclude_anomalies=request.exclude_anomalies,
-        skip=request.skip,
-        limit=request.limit
-    )
-    
-    return AvailabilitySearchResponse(
-        results=[
-            {
-                "availability": AvailabilityResponse.from_orm(r["availability"]),
-                "match_score": r["match_score"],
-                "distance_km": r["distance_km"],
-                "ai_confidence": r["ai_confidence"],
-                "ai_suggested_price": r["ai_suggested_price"]
-            }
-            for r in results
-        ],
-        total=len(results),
-        skip=request.skip,
-        limit=request.limit
+    raise HTTPException(
+        status_code=status.HTTP_410_GONE,
+        detail={
+            "error": "ENDPOINT_DEPRECATED",
+            "message": "Marketplace-style search is deprecated. Use INSTANT AUTOMATIC MATCHING instead.",
+            "recommendation": "Post a requirement (POST /requirements) and receive instant matches via notifications.",
+            "reason": "System moved from marketplace listing to real-time peer-to-peer matching for better efficiency and accuracy."
+        }
     )
 
 
@@ -223,10 +181,18 @@ async def get_my_availabilities(
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=1000),
     current_user=Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    redis_client: redis.Redis = Depends(get_redis),
+    _check: None = Depends(RequireCapability(Capabilities.TRADE_SELL))
 ):
     """Get seller's inventory list."""
-    seller_id = get_seller_id_from_user(current_user)
+    if not current_user.business_partner_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="User not associated with a business partner"
+        )
+    
+    seller_id = current_user.business_partner_id
     service = AvailabilityService(db, redis_client=redis_client)
     
     availabilities = await service.get_seller_availabilities(
@@ -248,7 +214,8 @@ async def get_my_availabilities(
 async def get_availability(
     availability_id: UUID,
     current_user=Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    redis_client: redis.Redis = Depends(get_redis)
 ):
     """Get single availability by ID."""
     service = AvailabilityService(db, redis_client=redis_client)
@@ -274,10 +241,17 @@ async def update_availability(
     request: AvailabilityUpdateRequest,
     current_user=Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
+    redis_client: redis.Redis = Depends(get_redis),
     _check: None = Depends(RequireCapability(Capabilities.AVAILABILITY_UPDATE))
 ):
-    """Update availability (seller only). Requires AVAILABILITY_UPDATE capability.""""
-    seller_id = get_seller_id_from_user(current_user)
+    """Update availability (seller only). Requires AVAILABILITY_UPDATE capability."""
+    if not current_user.business_partner_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="User not associated with a business partner"
+        )
+    
+    seller_id = current_user.business_partner_id
     service = AvailabilityService(db, redis_client=redis_client)
     
     # Verify ownership
@@ -315,10 +289,11 @@ async def approve_availability(
     request: ApprovalRequest,
     current_user=Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
+    redis_client: redis.Redis = Depends(get_redis),
     idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key"),
     _check: None = Depends(RequireCapability(Capabilities.AVAILABILITY_APPROVE))
 ):
-    """Approve availability for public listing (CRITICAL). Requires AVAILABILITY_APPROVE capability.""""
+    """Approve availability for public listing (CRITICAL). Requires AVAILABILITY_APPROVE capability."""
     service = AvailabilityService(db, redis_client=redis_client)
     
     try:
@@ -355,6 +330,7 @@ async def reserve_quantity(
     request: ReserveRequest,
     current_user=Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
+    redis_client: redis.Redis = Depends(get_redis),
     _check: None = Depends(RequireCapability(Capabilities.AVAILABILITY_RESERVE))
 ):
     """Reserve quantity for negotiation (internal API). Requires AVAILABILITY_RESERVE capability."""
@@ -389,9 +365,10 @@ async def release_quantity(
     request: ReleaseRequest,
     current_user=Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
+    redis_client: redis.Redis = Depends(get_redis),
     _check: None = Depends(RequireCapability(Capabilities.AVAILABILITY_RELEASE))
 ):
-    """Release reserved quantity (internal API). Requires AVAILABILITY_RELEASE capability.""""
+    """Release reserved quantity (internal API). Requires AVAILABILITY_RELEASE capability."""
     service = AvailabilityService(db, redis_client=redis_client)
     
     try:
@@ -422,6 +399,7 @@ async def mark_as_sold(
     request: MarkSoldRequest,
     current_user=Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
+    redis_client: redis.Redis = Depends(get_redis),
     _check: None = Depends(RequireCapability(Capabilities.AVAILABILITY_MARK_SOLD))
 ):
     """Mark quantity as sold (internal API). Requires AVAILABILITY_MARK_SOLD capability."""
@@ -457,7 +435,8 @@ async def mark_as_sold(
 async def get_negotiation_readiness(
     availability_id: UUID,
     current_user=Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    redis_client: redis.Redis = Depends(get_redis)
 ):
     """Get negotiation readiness score."""
     service = AvailabilityService(db, redis_client=redis_client)
@@ -489,7 +468,8 @@ async def get_similar_commodities(
     availability_id: UUID,
     limit: int = Query(10, ge=1, le=50),
     current_user=Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    redis_client: redis.Redis = Depends(get_redis)
 ):
     """Get similar commodity suggestions."""
     service = AvailabilityService(db, redis_client=redis_client)

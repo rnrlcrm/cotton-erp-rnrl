@@ -350,6 +350,11 @@ class Requirement(Base, EventMixin):
         nullable=False,
         comment='Requirement valid until date'
     )
+    eod_cutoff = Column(
+        DateTime(timezone=True),
+        nullable=True,
+        comment='End-of-day cutoff time (timezone-aware). Requirement expires at this time.'
+    )
     urgency_level = Column(
         String(20),
         nullable=False,

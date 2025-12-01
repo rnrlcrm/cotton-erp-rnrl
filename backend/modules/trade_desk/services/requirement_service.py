@@ -227,47 +227,8 @@ class RequirementService:
         )
         
         # ====================================================================
-        # STEP 1B: 🚀 ROLE RESTRICTION VALIDATION (Option A)
-        # Prevent SELLER from posting BUY requirements
-        # Allow BUYER and TRADER to post BUY requirements
+        # STEP 1B: Calculate estimated trade value (for risk check later)
         # ====================================================================
-        from backend.modules.risk.risk_engine import RiskEngine
-        risk_engine = RiskEngine(self.db)
-        
-        role_validation = await risk_engine.validate_partner_role(
-            partner_id=buyer_id,
-            transaction_type="BUY"
-        )
-        
-        if not role_validation["allowed"]:
-            raise ValueError(role_validation["reason"])
-        
-        # ====================================================================
-        # STEP 1B: 🚀 CIRCULAR TRADING PREVENTION (Option A: Same-day only)
-        # Block if buyer has open SELL for same commodity today
-        # ====================================================================
-        circular_check = await risk_engine.check_circular_trading(
-            partner_id=buyer_id,
-            commodity_id=commodity_id,
-            transaction_type="BUY",
-            trade_date=valid_from.date()
-        )
-        
-        if circular_check["blocked"]:
-            raise ValueError(
-                f"{circular_check['reason']}\n\n"
-                f"Recommendation: {circular_check['recommendation']}"
-            )
-        
-        # ====================================================================
-        # STEP 2: 🚀 Risk precheck (credit limit, buyer rating, payment performance)
-        # ====================================================================
-        # Fetch buyer credit & performance data (placeholder - integrate with credit module)
-        buyer_credit_limit_remaining = await self._fetch_buyer_credit_limit(buyer_id)
-        buyer_rating_score = await self._fetch_buyer_rating(buyer_id)
-        buyer_payment_performance_score = await self._fetch_payment_performance(buyer_id)
-        
-        # Calculate estimated trade value upfront
         estimated_trade_value = None
         if preferred_quantity and max_budget_per_unit:
             estimated_trade_value = preferred_quantity * max_budget_per_unit
@@ -275,7 +236,7 @@ class RequirementService:
             estimated_trade_value = min_quantity * max_budget_per_unit
         
         # ====================================================================
-        # STEP 3: Auto-normalize quality requirements (AI standardization)
+        # STEP 2: Auto-normalize quality requirements (AI standardization)
         # ====================================================================
         quality_requirements = await self.normalize_quality_requirements(
             commodity_id,
@@ -486,19 +447,46 @@ class RequirementService:
         requirement = await self.repo.create(requirement)
         
         # ====================================================================
-        # 🚀 UPDATE RISK PRECHECK (after creation with calculated values)
+        # 🔥 COMPREHENSIVE RISK CHECK (AFTER creation, BEFORE matching)
         # ====================================================================
-        if buyer_credit_limit_remaining or buyer_rating_score or buyer_payment_performance_score:
-            requirement.update_risk_precheck(
-                credit_limit_remaining=buyer_credit_limit_remaining,
-                rating_score=buyer_rating_score,
-                payment_performance_score=buyer_payment_performance_score
+        from backend.modules.risk.risk_engine import RiskEngine
+        from backend.modules.risk.exceptions import RiskCheckFailedError
+        
+        risk_engine = RiskEngine(self.db)
+        
+        try:
+            risk_result = await risk_engine.comprehensive_check(
+                entity_type="requirement",
+                entity_id=requirement.id,
+                partner_id=buyer_id,
+                commodity_id=commodity_id,
+                estimated_value=estimated_trade_value or Decimal("0")
             )
-            # Update DB with risk assessment
+            
+            # Update requirement with risk assessment
+            requirement.risk_precheck_status = risk_result["status"]
+            requirement.risk_precheck_score = risk_result["score"]
+            requirement.risk_flags = {
+                "risk_factors": risk_result["risk_factors"],
+                "circular_trading": risk_result["circular_trading"],
+                "wash_trading": risk_result["wash_trading"],
+                "checked_at": risk_result["checked_at"]
+            }
+            
             await self.repo.update(requirement)
+            
+        except RiskCheckFailedError as e:
+            # Risk check failed - mark requirement as BLOCKED
+            requirement.status = "BLOCKED"
+            requirement.risk_precheck_status = "FAIL"
+            requirement.risk_flags = e.risk_details
+            await self.repo.update(requirement)
+            
+            # Re-raise to inform caller
+            raise ValueError(f"Risk check failed: {e.message}") from e
         
         # ====================================================================
-        # EMIT EVENTS
+        # EMIT EVENTS (only if risk passed)
         # ====================================================================
         requirement.emit_created(created_by)
         
@@ -551,6 +539,44 @@ class RequirementService:
         # ====================================================================
         if auto_publish:
             await self._route_by_intent(requirement)
+        
+        # ====================================================================
+        # 🔥 STEP 14: INSTANT AUTOMATIC MATCHING (No marketplace listing)
+        # ====================================================================
+        # Trigger instant matching - find sellers immediately
+        # This is NOT marketplace - no browsing/listing allowed
+        try:
+            from backend.modules.trade_desk.services.matching_service import MatchingService, MatchPriority
+            from backend.modules.trade_desk.matching.matching_engine import MatchingEngine
+            from backend.modules.trade_desk.matching.validators import MatchValidator
+            from backend.modules.trade_desk.config.matching_config import MatchingConfig
+            
+            # Initialize matching components
+            matching_engine = MatchingEngine(self.db)
+            validator = MatchValidator(self.db)
+            config = MatchingConfig()
+            matching_service = MatchingService(
+                db=self.db,
+                matching_engine=matching_engine,
+                validator=validator,
+                config=config,
+                redis_client=self.redis_client
+            )
+            
+            # 🔥 INSTANT MATCH - High priority (user just posted)
+            await matching_service.on_requirement_created(
+                requirement_id=requirement.id,
+                priority=MatchPriority.HIGH  # Highest priority for instant matching
+            )
+            
+            logger.info(
+                f"Instant matching triggered for requirement {requirement.id} "
+                f"(buyer: {buyer_id}, commodity: {commodity_id})"
+            )
+            
+        except Exception as e:
+            logger.error(f"Failed to trigger instant matching for requirement {requirement.id}: {e}")
+            # Don't fail creation if matching fails - fallback to event-driven
         
         return requirement
     

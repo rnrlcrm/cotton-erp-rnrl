@@ -55,33 +55,6 @@ def get_requirement_service(
     return RequirementService(db, ws_service=ws_service, redis_client=redis_client)
 
 
-def get_buyer_id_from_user(user) -> UUID:
-    """
-    Extract buyer ID from user context.
-    
-    For EXTERNAL users: business_partner_id
-    For INTERNAL users: organization acts as buyer (for demo/testing)
-    """
-    if user.user_type == "EXTERNAL" and user.business_partner_id:
-        return user.business_partner_id
-    elif user.user_type == "INTERNAL" and user.organization_id:
-        return user.organization_id
-    else:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="User not associated with a business partner or organization"
-        )
-
-
-def get_seller_id_from_user(user) -> UUID:
-    """
-    Extract seller ID from user context.
-    
-    Same logic as buyer for now (users can be both buyers and sellers)
-    """
-    return get_buyer_id_from_user(user)
-
-
 # ========================================================================
 # PUBLIC REST APIs
 # ========================================================================
@@ -103,7 +76,8 @@ async def create_requirement(
     request: RequirementCreateRequest,
     current_user=Depends(get_current_user),
     service: RequirementService = Depends(get_requirement_service),
-    idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key")
+    idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key"),
+    _check: None = Depends(RequireCapability(Capabilities.TRADE_BUY))
 ):
     """
     Create new requirement posting with full AI enhancements.
@@ -124,7 +98,13 @@ async def create_requirement(
     
     Returns: Created requirement with AI enhancements
     """
-    buyer_id = get_buyer_id_from_user(current_user)
+    if not current_user.business_partner_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="User not associated with a business partner"
+        )
+    
+    buyer_id = current_user.business_partner_id
     
     try:
         requirement = await service.create_requirement(
@@ -191,7 +171,13 @@ async def get_requirement(
         )
     
     # Access control: buyers see own requirements, sellers see PUBLIC/RESTRICTED
-    buyer_id = get_buyer_id_from_user(current_user)
+    if not current_user.business_partner_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="User not associated with a business partner"
+        )
+    
+    buyer_id = current_user.business_partner_id
     if requirement.buyer_partner_id != buyer_id:
         # Check if seller has access based on visibility
         if requirement.market_visibility == "PRIVATE":
@@ -200,7 +186,7 @@ async def get_requirement(
                 detail="Access denied"
             )
         elif requirement.market_visibility == "RESTRICTED":
-            seller_id = get_seller_id_from_user(current_user)
+            seller_id = current_user.business_partner_id
             if requirement.invited_seller_ids and str(seller_id) not in requirement.invited_seller_ids:
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
@@ -231,7 +217,13 @@ async def update_requirement(
     - quality_changed
     - visibility_changed
     """
-    buyer_id = get_buyer_id_from_user(current_user)
+    if not current_user.business_partner_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="User not associated with a business partner"
+        )
+    
+    buyer_id = current_user.business_partner_id
     # Service with WebSocket support injected via dependency
     
     # Verify ownership
@@ -293,7 +285,13 @@ async def publish_requirement(
     - requirement.published event
     - Intent-based routing to downstream engines
     """
-    buyer_id = get_buyer_id_from_user(current_user)
+    if not current_user.business_partner_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="User not associated with a business partner"
+        )
+    
+    buyer_id = current_user.business_partner_id
     # Service with WebSocket support injected via dependency
     
     # Verify ownership
@@ -348,7 +346,13 @@ async def cancel_requirement(
     _check: None = Depends(RequireCapability(Capabilities.REQUIREMENT_CANCEL))
 ):
     """Cancel requirement. Requires REQUIREMENT_CANCEL capability."""
-    buyer_id = get_buyer_id_from_user(current_user)
+    if not current_user.business_partner_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="User not associated with a business partner"
+        )
+    
+    buyer_id = current_user.business_partner_id
     # Service with WebSocket support injected via dependency
     
     # Verify ownership
@@ -403,7 +407,13 @@ async def update_fulfillment(
     _check: None = Depends(RequireCapability(Capabilities.REQUIREMENT_FULFILL))
 ):
     """Update fulfillment tracking. Requires REQUIREMENT_FULFILL capability."""
-    buyer_id = get_buyer_id_from_user(current_user)
+    if not current_user.business_partner_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="User not associated with a business partner"
+        )
+    
+    buyer_id = current_user.business_partner_id
     # Service with WebSocket support injected via dependency
     
     # Verify ownership
@@ -447,61 +457,52 @@ async def update_fulfillment(
 @router.post(
     "/search",
     response_model=RequirementSearchResponse,
-    summary="AI-powered smart search",
-    description="Multi-criteria search with AI matching"
+    summary="[DEPRECATED] AI-powered smart search - Use instant matching instead",
+    description="⚠️ DEPRECATED: This marketplace-style search is deprecated. System now uses INSTANT AUTOMATIC MATCHING. When you post availability, matches are found automatically in real-time.",
+    deprecated=True
 )
 async def search_requirements(
     request: RequirementSearchRequest,
     current_user=Depends(get_current_user),
-    service: RequirementService = Depends(get_requirement_service)
+    service: RequirementService = Depends(get_requirement_service),
+    _check: None = Depends(RequireCapability(Capabilities.TRADE_SELL))
 ):
     """
-    AI-powered smart search for compatible requirements.
+    ⚠️ DEPRECATED ENDPOINT
     
-    Features:
-    - Quality tolerance fuzzy matching
-    - Budget range filtering
-    - Geo-spatial distance filtering
-    - Market visibility access control
-    - Buyer priority score weighting
-    - Ranked by match score (0.0 to 1.0)
+    This marketplace-style search is deprecated. The system now uses INSTANT AUTOMATIC MATCHING:
+    
+    **New Workflow:**
+    1. Seller posts availability → System instantly finds matching requirements
+    2. Buyer posts requirement → System instantly finds matching availabilities
+    3. Matches are sent via notifications/events (NO manual browsing needed)
+    
+    **Why this changed:**
+    - Real-time matching is faster and more efficient
+    - Prevents users from seeing stale/already-matched requirements
+    - Ensures best matches based on AI scoring and risk assessment
+    - No marketplace listing - direct peer-to-peer matching only
+    
+    **Recommendation:** 
+    Use POST /availabilities instead. Matches will be delivered instantly.
     """
-    seller_id = get_seller_id_from_user(current_user)
-    # Service with WebSocket support injected via dependency
-    
-    results = await service.search_requirements(
-        seller_id=seller_id,
-        commodity_id=request.commodity_id,
-        min_quantity=request.min_quantity,
-        max_quantity=request.max_quantity,
-        quality_requirements=request.quality_requirements,
-        quality_tolerance=request.quality_tolerance,
-        min_budget=request.min_budget,
-        max_budget=request.max_budget,
-        urgency_level=request.urgency_level,
-        intent_type=request.intent_type,
-        market_visibility=request.market_visibility,
-        buyer_latitude=request.buyer_latitude,
-        buyer_longitude=request.buyer_longitude,
-        max_distance_km=request.max_distance_km,
-        min_priority_score=request.min_priority_score,
-        skip=request.skip,
-        limit=request.limit
-    )
-    
-    return RequirementSearchResponse(
-        results=results,
-        total=len(results),
-        skip=request.skip,
-        limit=request.limit
+    raise HTTPException(
+        status_code=status.HTTP_410_GONE,
+        detail={
+            "error": "ENDPOINT_DEPRECATED",
+            "message": "Marketplace-style search is deprecated. Use INSTANT AUTOMATIC MATCHING instead.",
+            "recommendation": "Post an availability (POST /availabilities) and receive instant matches via notifications.",
+            "reason": "System moved from marketplace listing to real-time peer-to-peer matching for better efficiency and accuracy."
+        }
     )
 
 
 @router.post(
     "/search/by-intent",
     response_model=List[RequirementResponse],
-    summary="🚀 Search by intent type",
-    description="Intent-based search for routing to Matching/Negotiation/Auction engines"
+    summary="[DEPRECATED] Search by intent type - Use instant matching instead",
+    description="⚠️ DEPRECATED: This marketplace-style search is deprecated. System now uses INSTANT AUTOMATIC MATCHING with automatic intent routing.",
+    deprecated=True
 )
 async def search_by_intent(
     request: IntentSearchRequest,
@@ -509,26 +510,37 @@ async def search_by_intent(
     service: RequirementService = Depends(get_requirement_service)
 ):
     """
-    🚀 ENHANCEMENT #1: Intent-based search.
+    ⚠️ DEPRECATED ENDPOINT
     
-    Routes requirements to correct engine:
-    - DIRECT_BUY → Matching Engine
-    - NEGOTIATION → Negotiation Queue
-    - AUCTION_REQUEST → Reverse Auction
-    - PRICE_DISCOVERY_ONLY → Market Insights
+    This marketplace-style intent search is deprecated. The system now uses INSTANT AUTOMATIC MATCHING:
+    
+    **New Workflow:**
+    1. Seller posts availability → System instantly routes to correct engine based on intent:
+       - DIRECT_BUY → Instant Matching Engine
+       - NEGOTIATION → Negotiation Queue (automatic)
+       - AUCTION_REQUEST → Reverse Auction (automatic)
+       - PRICE_DISCOVERY_ONLY → Market Insights
+    2. Buyer posts requirement → Automatic intent routing happens instantly
+    3. No need to search by intent - system handles it automatically
+    
+    **Why this changed:**
+    - Real-time matching with automatic intent detection
+    - No manual search needed - system routes automatically
+    - Better matches via AI scoring + risk assessment
+    - Prevents stale requirement browsing
+    
+    **Recommendation:** 
+    Use POST /availabilities instead. System automatically routes by intent type.
     """
-    # Service with WebSocket support injected via dependency
-    
-    requirements = await service.search_by_intent(
-        intent_type=request.intent_type,
-        commodity_id=request.commodity_id,
-        urgency_level=request.urgency_level,
-        min_priority_score=request.min_priority_score,
-        skip=request.skip,
-        limit=request.limit
+    raise HTTPException(
+        status_code=status.HTTP_410_GONE,
+        detail={
+            "error": "ENDPOINT_DEPRECATED",
+            "message": "Intent-based search is deprecated. Use INSTANT AUTOMATIC MATCHING with automatic intent routing.",
+            "recommendation": "Post an availability (POST /availabilities) and system will automatically match requirements based on intent type (DIRECT_BUY/NEGOTIATION/AUCTION/PRICE_DISCOVERY).",
+            "reason": "System moved to automatic intent-based routing with real-time matching."
+        }
     )
-    
-    return [RequirementResponse.from_orm(req) for req in requirements]
 
 
 @router.get(
@@ -542,10 +554,17 @@ async def get_my_requirements(
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=1000),
     current_user=Depends(get_current_user),
-    service: RequirementService = Depends(get_requirement_service)
+    service: RequirementService = Depends(get_requirement_service),
+    _check: None = Depends(RequireCapability(Capabilities.TRADE_BUY))
 ):
     """Get all requirements for current buyer."""
-    buyer_id = get_buyer_id_from_user(current_user)
+    if not current_user.business_partner_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="User not associated with a business partner"
+        )
+    
+    buyer_id = current_user.business_partner_id
     # Service with WebSocket support injected via dependency
     
     requirements = await service.get_buyer_requirements(
@@ -630,7 +649,13 @@ async def apply_ai_adjustment(
     - Tight delivery timeline → AI suggests window extension
     - Better matches available → AI suggests commodity equivalents
     """
-    buyer_id = get_buyer_id_from_user(current_user)
+    if not current_user.business_partner_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="User not associated with a business partner"
+        )
+    
+    buyer_id = current_user.business_partner_id
     # Service with WebSocket support injected via dependency
     
     # Verify ownership
@@ -738,7 +763,13 @@ async def get_requirement_history(
     - Tracking buyer behavior patterns
     - Dispute resolution
     """
-    buyer_id = get_buyer_id_from_user(current_user)
+    if not current_user.business_partner_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="User not associated with a business partner"
+        )
+    
+    buyer_id = current_user.business_partner_id
     # Service with WebSocket support injected via dependency
     
     # Verify ownership or access
@@ -757,7 +788,7 @@ async def get_requirement_history(
                 detail="Access denied"
             )
         elif requirement.market_visibility == "RESTRICTED":
-            seller_id = get_seller_id_from_user(current_user)
+            seller_id = current_user.business_partner_id
             if requirement.invited_seller_ids and str(seller_id) not in requirement.invited_seller_ids:
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,

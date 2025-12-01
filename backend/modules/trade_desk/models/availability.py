@@ -214,6 +214,11 @@ class Availability(Base, EventMixin):
     available_from = Column(DateTime(timezone=True), nullable=True)
     available_until = Column(DateTime(timezone=True), nullable=True)
     expiry_date = Column(DateTime(timezone=True), nullable=True)
+    eod_cutoff = Column(
+        DateTime(timezone=True),
+        nullable=True,
+        comment='End-of-day cutoff time (timezone-aware). Availability expires at this time.'
+    )
     
     # Status & Approval
     status = Column(
