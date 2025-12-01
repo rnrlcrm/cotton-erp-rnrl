@@ -296,7 +296,7 @@ class TestPartnerOnboardingWorkflow:
         await service.submit_for_approval(application.id)
         
         # Get risk assessment
-        risk_service = RiskScoringService()
+        risk_service = RiskScoringService(db_session)
         risk_assessment = await risk_service.calculate_risk_score(
             partner_type=PartnerType.SELLER,
             entity_type=BusinessEntityType.PRIVATE_LIMITED,
@@ -398,15 +398,19 @@ class TestPartnerCRUD:
         """✅ Test: List partners with status and type filters."""  
         org_id = seed_organization.id
         repo = BusinessPartnerRepository(db_session)
+        
+        # Use unique prefix to identify partners created in this test
+        test_prefix = "FilterTest_"
+        
         # Create multiple partners
         partners = [
             BusinessPartner(
-                legal_name=f"Partner {i}",
+                legal_name=f"{test_prefix}Partner {i}",
                 partner_type=PartnerType.BUYER if i % 2 == 0 else PartnerType.SELLER,
                 country="India",
                 entity_class="business_entity",
                 status=PartnerStatus.APPROVED if i % 3 == 0 else PartnerStatus.PENDING,
-                bank_account_name=f"Partner {i}",
+                bank_account_name=f"{test_prefix}Partner {i}",
                 bank_name="HDFC Bank",
                 bank_account_number=f"12345678{i}",
                 bank_routing_code="HDFC0001234",
@@ -415,7 +419,7 @@ class TestPartnerCRUD:
                 primary_postal_code="400001",
                 primary_country="India",
                 primary_contact_name="Test Contact",
-                primary_contact_email=f"test{i}@example.com",
+                primary_contact_email=f"filtertest{i}@example.com",
                 primary_contact_phone=f"+9198765432{i:02d}",
                 primary_currency="INR",
             )
@@ -431,8 +435,15 @@ class TestPartnerCRUD:
             status=PartnerStatus.APPROVED
         )
 
-        approved_count = len([p for p in partners if p.status == PartnerStatus.APPROVED])
-        assert len(result) == approved_count
+        # Verify that partners we created with APPROVED status are in the result
+        approved_partners = [p for p in partners if p.status == PartnerStatus.APPROVED]
+        approved_ids = {p.id for p in approved_partners}
+        result_ids = {p.id for p in result}
+        
+        # All our approved partners should be in the results
+        assert approved_ids.issubset(result_ids), "All approved partners should be in results"
+        # The filter should only return approved partners
+        assert all(p.status == PartnerStatus.APPROVED for p in result), "All results should be approved"
 
     @pytest.mark.asyncio
     async def test_update_partner(self, db_session: AsyncSession, seed_organization):
@@ -1095,7 +1106,7 @@ class TestRiskScoring:
     @pytest.mark.asyncio
     async def test_risk_score_calculation_low_risk(self, db_session: AsyncSession):
         """✅ Test: Calculate risk score for low-risk partner."""
-        service = RiskScoringService()
+        service = RiskScoringService(db_session)
 
         # Old established business = low risk
         assessment = await service.calculate_risk_score(
@@ -1113,7 +1124,7 @@ class TestRiskScoring:
     @pytest.mark.asyncio
     async def test_risk_score_calculation_high_risk(self, db_session: AsyncSession):
         """✅ Test: Calculate risk score for high-risk partner."""
-        service = RiskScoringService()
+        service = RiskScoringService(db_session)
 
         # New business, low turnover = high risk
         assessment = await service.calculate_risk_score(

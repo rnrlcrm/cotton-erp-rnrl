@@ -10,7 +10,7 @@ from decimal import Decimal
 from typing import Any, Dict, List, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, EmailStr, Field, validator
+from pydantic import BaseModel, EmailStr, Field, field_validator
 
 from backend.modules.partners.enums import (
     AmendmentType,
@@ -536,8 +536,9 @@ class EmployeeInvite(BaseModel):
     designation: Optional[str] = None
     permissions: Optional[Dict[str, bool]] = None
 
-    @validator('employee_email')
-    def validate_corporate_email(cls, v):
+    @field_validator('employee_email')
+    @classmethod
+    def validate_corporate_email(cls, v: str) -> str:
         """Block generic email providers - only allow corporate domains"""
         if not v:
             raise ValueError("Employee email is required")
