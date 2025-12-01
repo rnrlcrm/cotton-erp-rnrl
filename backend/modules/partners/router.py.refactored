@@ -86,38 +86,6 @@ def get_event_emitter(db: AsyncSession = Depends(get_db)) -> EventEmitter:
     return EventEmitter(db)
 
 
-def get_partner_service(
-    db: AsyncSession = Depends(get_db),
-    redis_client: redis.Redis = Depends(get_redis),
-    current_user = Depends(get_current_user)
-) -> partner_services.PartnerService:
-    """Get PartnerService instance with dependencies"""
-    event_emitter = EventEmitter(db)
-    return partner_services.PartnerService(
-        db=db,
-        event_emitter=event_emitter,
-        current_user_id=current_user.id,
-        organization_id=current_user.organization_id,
-        redis_client=redis_client
-    )
-
-
-def get_analytics_service(
-    db: AsyncSession = Depends(get_db),
-    redis_client: redis.Redis = Depends(get_redis)
-) -> PartnerAnalyticsService:
-    """Get PartnerAnalyticsService instance"""
-    return PartnerAnalyticsService(db=db, redis_client=redis_client)
-
-
-def get_document_service(
-    db: AsyncSession = Depends(get_db),
-    redis_client: redis.Redis = Depends(get_redis)
-) -> PartnerDocumentService:
-    """Get PartnerDocumentService instance"""
-    return PartnerDocumentService(db=db, redis_client=redis_client)
-
-
 # ===== ONBOARDING ENDPOINTS =====
 
 @router.post(
@@ -188,7 +156,8 @@ async def upload_document(
     application_id: UUID,
     document_type: str,
     file: UploadFile = File(...),
-    partner_service: partner_services.PartnerService = Depends(get_partner_service),
+    db: AsyncSession = Depends(get_db),
+    user_id: UUID = Depends(get_current_user_id),
     organization_id: UUID = Depends(get_current_organization_id),
     idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key"),
     _check: None = Depends(RequireCapability(Capabilities.PARTNER_CREATE)),
@@ -211,8 +180,9 @@ async def upload_document(
     else:
         extracted_data = {}
     
-    # Get application to find partner_id
-    application = await partner_service.get_application_by_id(application_id)
+    # Create document record
+        # Get application to find partner_id
+        application = await app_repo.get_by_id(application_id, organization_id)
     
     if not application:
         raise HTTPException(
@@ -220,8 +190,8 @@ async def upload_document(
             detail="Application not found"
         )
     
-    # Create document using service's repository (temporary - should be in service method)
-    document = await partner_service.document_repo.create(
+    # Create document
+    document = await doc_repo.create(
         partner_id=application.id,  # For now, link to application
         organization_id=organization_id,
         document_type=document_type,
@@ -231,7 +201,7 @@ async def upload_document(
         mime_type=file.content_type,
         ocr_extracted_data=extracted_data,
         ocr_confidence=extracted_data.get("confidence", 0),
-        uploaded_by=partner_service.current_user_id
+        uploaded_by=user_id
     )
     
     return document
@@ -285,11 +255,11 @@ async def submit_for_approval(
 )
 async def get_application_status(
     application_id: UUID,
-    partner_service: PartnerService = Depends(get_partner_service),
+    db: AsyncSession = Depends(get_db),
     organization_id: UUID = Depends(get_current_organization_id)
 ):
     """Get current status of onboarding application"""
-    application = await partner_service.get_application_by_id(application_id)
+        application = await app_repo.get_by_id(application_id, organization_id)
     
     if not application:
         raise HTTPException(
@@ -318,7 +288,6 @@ async def get_application_status(
 async def approve_partner(
     application_id: UUID,
     decision: ApprovalDecision,
-    partner_service: PartnerService = Depends(get_partner_service),
     db: AsyncSession = Depends(get_db),
     user_id: UUID = Depends(get_current_user_id),
     idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key"),
@@ -328,7 +297,8 @@ async def approve_partner(
     approval_service = partner_services.ApprovalService(db, user_id, redis_client=redis_client)
     
     # Get application
-    application = await partner_service.get_application_by_id(application_id)
+        application = await app_repo.get_by_id(application_id)
+    
     if not application:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -373,10 +343,8 @@ async def approve_partner(
     """
 )
 async def reject_partner(
-async def reject_partner(
     application_id: UUID,
     decision: ApprovalDecision,
-    partner_service: PartnerService = Depends(get_partner_service),
     db: AsyncSession = Depends(get_db),
     user_id: UUID = Depends(get_current_user_id),
     idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key"),
@@ -386,7 +354,9 @@ async def reject_partner(
     decision.approved = False
     
     approval_service = partner_services.ApprovalService(db, user_id, redis_client=redis_client)
-    application = await partner_service.get_application_by_id(application_id)
+        application = await app_repo.get_by_id(application_id)
+    
+    if not application:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Application not found"
@@ -427,10 +397,12 @@ async def list_partners(
     status: Optional[PartnerStatus] = None,
     kyc_status: Optional[KYCStatus] = None,
     search: Optional[str] = None,
-    partner_service: partner_services.PartnerService = Depends(get_partner_service)
+    db: AsyncSession = Depends(get_db),
+    organization_id: UUID = Depends(get_current_organization_id)
 ):
     """List all partners with filters (auto-isolated by organization)"""
-    partners = await partner_service.list_all_partners(
+        partners = await bp_repo.list_all(
+        organization_id=organization_id,
         skip=skip,
         limit=limit,
         partner_type=partner_type,
@@ -449,10 +421,11 @@ async def list_partners(
 )
 async def get_partner(
     partner_id: UUID,
-    partner_service: partner_services.PartnerService = Depends(get_partner_service)
+    db: AsyncSession = Depends(get_db),
+    organization_id: UUID = Depends(get_current_organization_id)
 ):
     """Get partner details by ID"""
-    partner = await partner_service.get_partner_by_id(partner_id)
+        partner = await bp_repo.get_by_id(partner_id, organization_id)
     
     if not partner:
         raise HTTPException(
@@ -470,10 +443,10 @@ async def get_partner(
 )
 async def get_partner_locations(
     partner_id: UUID,
-    partner_service: partner_services.PartnerService = Depends(get_partner_service)
+    db: AsyncSession = Depends(get_db)
 ):
     """Get all locations for a partner"""
-    locations = await partner_service.get_partner_locations(partner_id)
+        locations = await location_repo.get_by_partner(partner_id)
     return locations
 
 
@@ -514,12 +487,12 @@ async def add_partner_location(
     """
     from backend.modules.partners.services import GeocodingService, GSTVerificationService
     
-    from backend.modules.partners.services import GeocodingService, GSTVerificationService
-    
     # Verify partner exists
-    partner = await partner_service.get_partner_by_id(partner_id)
+        partner = await partner_repo.get_by_id(partner_id)
     if not partner:
         raise HTTPException(status_code=404, detail="Partner not found")
+    
+    # VALIDATION 1: Ship-To only for BUYERS
     if location_data.location_type == "ship_to":
         if partner.partner_type not in ["buyer", "trader"]:
             raise HTTPException(
@@ -576,16 +549,13 @@ async def add_partner_location(
     geocode_result = await geocoding.geocode_address(full_address)
     
     if not geocode_result or geocode_result.get("confidence", 0) < 50:
-    geocode_result = await geocoding.geocode_address(full_address)
-    
-    if not geocode_result or geocode_result.get("confidence", 0) < 50:
         raise HTTPException(
             status_code=400,
             detail="Could not verify address via Google Maps. Please check address details."
         )
     
     # Create location with Google Maps data
-    location = await partner_service.location_repo.create(
+        location = await location_repo.create(
         partner_id=partner_id,
         organization_id=partner.organization_id,
         location_type=location_data.location_type,
@@ -607,8 +577,13 @@ async def add_partner_location(
         status="active"
     )
     
+    await db.refresh(location)
+    
     # Emit event
-    emitter = EventEmitter()d,
+    emitter = EventEmitter()
+    from backend.modules.partners.events import PartnerLocationAddedEvent
+    await emitter.emit(PartnerLocationAddedEvent(
+        partner_id=partner_id,
         location_id=location.id,
         location_type=location_data.location_type,
         location_name=location_data.location_name,
@@ -628,10 +603,10 @@ async def add_partner_location(
 )
 async def get_partner_employees(
     partner_id: UUID,
-    partner_service: partner_services.PartnerService = Depends(get_partner_service)
+    db: AsyncSession = Depends(get_db)
 ):
     """Get all employees for a partner"""
-    employees = await partner_service.get_partner_employees(partner_id)
+        employees = await employee_repo.get_by_partner(partner_id)
     return employees
 
 
@@ -643,10 +618,10 @@ async def get_partner_employees(
 async def get_partner_documents(
     partner_id: UUID,
     document_type: Optional[str] = None,
-    partner_service: partner_services.PartnerService = Depends(get_partner_service)
+    db: AsyncSession = Depends(get_db)
 ):
     """Get all documents for a partner"""
-    documents = await partner_service.get_partner_documents(partner_id)
+        documents = await doc_repo.get_by_partner(partner_id, document_type)
     return documents
 
 
@@ -657,10 +632,10 @@ async def get_partner_documents(
 )
 async def get_partner_vehicles(
     partner_id: UUID,
-    partner_service: partner_services.PartnerService = Depends(get_partner_service)
+    db: AsyncSession = Depends(get_db)
 ):
     """Get all vehicles for a transporter partner"""
-    vehicles = await partner_service.get_partner_vehicles(partner_id)
+        vehicles = await vehicle_repo.get_by_partner(partner_id)
     return vehicles
 
 
@@ -852,7 +827,6 @@ async def complete_kyc_renewal(
 async def add_vehicle(
     partner_id: UUID,
     vehicle: VehicleData,
-    partner_service: PartnerService = Depends(get_partner_service),
     db: AsyncSession = Depends(get_db),
     user_id: UUID = Depends(get_current_user_id),
     organization_id: UUID = Depends(get_current_organization_id),
@@ -860,9 +834,9 @@ async def add_vehicle(
     _check: None = Depends(RequireCapability(Capabilities.PARTNER_UPDATE)),
 ):
     """Add vehicle for transporter"""
-    # TODO: Verify vehicle from RTO
+        # TODO: Verify vehicle from RTO
     
-    new_vehicle = await partner_service.vehicle_repo.create(
+    new_vehicle = await vehicle_repo.create(
         partner_id=partner_id,
         organization_id=organization_id,
         registration_number=vehicle.registration_number,
@@ -876,6 +850,12 @@ async def add_vehicle(
     )
     
     return new_vehicle
+
+
+# ===== ENHANCED FILTERS & SEARCH =====
+
+@router.get(
+    "/list",
     response_model=Dict[str, Any],
     summary="List Partners with Advanced Filters",
     description="""
@@ -901,25 +881,85 @@ async def list_partners_advanced(
     sort_order: str = "desc",
     skip: int = 0,
     limit: int = 50,
-    partner_service: PartnerService = Depends(get_partner_service),
+    db: AsyncSession = Depends(get_db),
     organization_id: UUID = Depends(get_current_organization_id)
 ):
     """List partners with advanced filters"""
-    return await partner_service.search_partners_advanced(
-        partner_type=partner_type,
-        status=status,
-        kyc_status=kyc_status,
-        kyc_expiring_days=kyc_expiring_days,
-        risk_category=risk_category,
-        state=state,
-        date_from=date_from,
-        date_to=date_to,
-        search=search,
-        sort_by=sort_by,
-        sort_order=sort_order,
-        skip=skip,
-        limit=limit
+    from sqlalchemy import select, func, or_, and_, desc, asc
+    from datetime import datetime, timedelta
+    from backend.modules.partners.models import BusinessPartner
+    
+    # Base query
+    query = select(BusinessPartner).where(
+        BusinessPartner.organization_id == organization_id,
+        BusinessPartner.is_deleted == False
     )
+    
+    # Apply filters
+    if partner_type:
+        query = query.where(BusinessPartner.partner_type == partner_type)
+    
+    if status:
+        query = query.where(BusinessPartner.status == status)
+    
+    if kyc_status:
+        query = query.where(BusinessPartner.kyc_status == kyc_status)
+    
+    if kyc_expiring_days:
+        expiry_threshold = datetime.utcnow() + timedelta(days=kyc_expiring_days)
+        query = query.where(
+            and_(
+                BusinessPartner.kyc_expiry_date <= expiry_threshold,
+                BusinessPartner.kyc_expiry_date >= datetime.utcnow()
+            )
+        )
+    
+    if risk_category:
+        query = query.where(BusinessPartner.risk_category == risk_category)
+    
+    if state:
+        query = query.where(BusinessPartner.primary_state == state)
+    
+    if date_from:
+        query = query.where(BusinessPartner.created_at >= datetime.fromisoformat(date_from))
+    
+    if date_to:
+        query = query.where(BusinessPartner.created_at <= datetime.fromisoformat(date_to))
+    
+    if search:
+        search_pattern = f"%{search}%"
+        query = query.where(
+            or_(
+                BusinessPartner.legal_business_name.ilike(search_pattern),
+                BusinessPartner.trade_name.ilike(search_pattern),
+                BusinessPartner.tax_id_number.ilike(search_pattern),
+                BusinessPartner.pan_number.ilike(search_pattern)
+            )
+        )
+    
+    # Get total count
+    count_query = select(func.count()).select_from(query.subquery())
+    total = await db.scalar(count_query)
+    
+    # Apply sorting
+    if sort_order == "desc":
+        query = query.order_by(desc(getattr(BusinessPartner, sort_by)))
+    else:
+        query = query.order_by(asc(getattr(BusinessPartner, sort_by)))
+    
+    # Apply pagination
+    query = query.offset(skip).limit(limit)
+    
+    # Execute
+    result = await db.execute(query)
+    partners = result.scalars().all()
+    
+    return {
+        "total": total,
+        "skip": skip,
+        "limit": limit,
+        "data": partners
+    }
 
 
 # ===== EXPORT FUNCTIONALITY =====
@@ -1036,28 +1076,27 @@ async def download_kyc_register(
     """Generate and download complete KYC register PDF"""
     from fastapi.responses import StreamingResponse
     from reportlab.lib.pagesizes import A4
-    partner_id: UUID,
-    partner_service: PartnerService = Depends(get_partner_service),
-    db: AsyncSession = Depends(get_db),
-    user_id: UUID = Depends(get_current_user_id),
-    organization_id: UUID = Depends(get_current_organization_id)
-):
-    """Generate and download complete KYC register PDF"""
-    from fastapi.responses import StreamingResponse
-    from reportlab.lib.pagesizes import A4
     from reportlab.pdfgen import canvas
     import io
     
     # Get partner with all related data
-    partner = await partner_service.get_partner_by_id(partner_id)
+        partner = await partner_repo.get_by_id(partner_id, organization_id)
     
     if not partner:
         raise HTTPException(status_code=404, detail="Partner not found")
     
     # Get related data
-    locations = await partner_service.get_partner_locations(partner_id)
-    documents = await partner_service.get_partner_documents(partner_id)
-    employees = await partner_service.get_partner_employees(partner_id)
+                locations = await loc_repo.get_by_partner_id(partner_id)
+    documents = await doc_repo.get_by_partner_id(partner_id)
+    employees = await emp_repo.get_by_partner_id(partner_id)
+    
+    # Create PDF
+    buffer = io.BytesIO()
+    p = canvas.Canvas(buffer, pagesize=A4)
+    width, height = A4
+    
+    # Title
+    p.setFont("Helvetica-Bold", 16)
     p.drawString(50, height - 50, "KYC REGISTER")
     
     # Business Details

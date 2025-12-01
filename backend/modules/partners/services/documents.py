@@ -12,7 +12,9 @@ from uuid import UUID
 
 from fastapi import UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
+import redis.asyncio as redis
 
+from backend.core.outbox import OutboxRepository
 from backend.modules.partners.repositories import PartnerDocumentRepository
 from backend.modules.partners.models import PartnerDocument
 from backend.modules.partners.enums import DocumentType
@@ -32,8 +34,10 @@ class PartnerDocumentService:
     - Document retrieval
     """
     
-    def __init__(self, db: AsyncSession):
+    def __init__(self, db: AsyncSession, redis_client: Optional[redis.Redis] = None):
         self.db = db
+        self.redis = redis_client
+        self.outbox_repo = OutboxRepository(db)
         self.document_repo = PartnerDocumentRepository(db)
     
     async def upload_document(

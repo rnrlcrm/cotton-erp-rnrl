@@ -13,7 +13,9 @@ from datetime import datetime, timedelta
 
 from sqlalchemy import select, func, and_, desc
 from sqlalchemy.ext.asyncio import AsyncSession
+import redis.asyncio as redis
 
+from backend.core.outbox import OutboxRepository
 from backend.modules.partners.models import BusinessPartner
 from backend.modules.partners.enums import PartnerStatus, PartnerType, KYCStatus, RiskCategory
 
@@ -30,8 +32,10 @@ class PartnerAnalyticsService:
     - Risk distribution
     """
     
-    def __init__(self, db: AsyncSession):
+    def __init__(self, db: AsyncSession, redis_client: Optional[redis.Redis] = None):
         self.db = db
+        self.redis = redis_client
+        self.outbox_repo = OutboxRepository(db)
     
     async def get_dashboard_stats(self, organization_id: UUID) -> Dict[str, Any]:
         """

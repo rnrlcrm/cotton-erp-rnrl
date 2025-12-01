@@ -120,92 +120,40 @@ async def login(
     _check: None = Depends(RequireCapability(Capabilities.AUTH_LOGIN))
 ) -> TokenResponse | LoginWith2FAResponse:
     """Login for INTERNAL users with password. EXTERNAL users must use OTP. Requires AUTH_LOGIN capability. Supports idempotency."""
-    from backend.modules.settings.repositories.settings_repositories import UserRepository
-    from backend.core.auth.jwt import create_token
-    from backend.core.settings.config import settings as app_settings
-    from backend.modules.settings.models.settings_models import RefreshToken
-    from backend.core.auth.jwt import decode_token
-    from datetime import datetime, timezone
-    
     # Initialize account lockout service
     lockout_service = AccountLockoutService(redis_client)
     
-    # Check if account is locked
-    is_locked, ttl = await lockout_service.is_locked(payload.email)
-    if is_locked:
-        raise HTTPException(
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail=f"Account locked due to too many failed login attempts. Try again in {ttl // 60} minutes."
-        )
-    
-    svc = AuthService(db)
-    user_repo = UserRepository(db)
+    # Initialize AuthService with Redis
+    svc = AuthService(db, redis_client)
     
     try:
-        # Get user by email
-        user = await user_repo.get_by_email(payload.email)
+        # Use AuthService login_with_lockout (handles all validation and lockout logic)
+        user, access, refresh, expires_in, requires_2fa = await svc.login_with_lockout(
+            payload.email,
+            payload.password,
+            lockout_service
+        )
         
-        if not user:
-            # Record failed attempt
-            await lockout_service.record_failed_attempt(payload.email)
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
-        
-        # Check user type - EXTERNAL users must use OTP
-        if user.user_type not in ['INTERNAL', 'SUPER_ADMIN']:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="EXTERNAL users must login via mobile OTP"
-            )
-        
-        if not user.is_active:
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User account is inactive")
-        
-        # Verify password
-        if not svc.hasher.verify(payload.password, user.password_hash):
-            # Record failed attempt
-            lockout_info = await lockout_service.record_failed_attempt(payload.email)
-            if lockout_info["locked"]:
-                raise HTTPException(
-                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                    detail=lockout_info["message"]
-                )
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail=f"Invalid credentials. {lockout_info['remaining_attempts']} attempts remaining."
-            )
-        
-        # Clear failed attempts on successful password verification
-        await lockout_service.clear_failed_attempts(payload.email)
-        
-        # Check if 2FA is enabled
-        if user.two_fa_enabled:
+        # Check if 2FA is required
+        if requires_2fa:
             return LoginWith2FAResponse(
                 two_fa_required=True,
                 message="2FA enabled. Please verify with PIN.",
                 email=payload.email
             )
         
-        # No 2FA - generate tokens
-        access_minutes = app_settings.ACCESS_TOKEN_EXPIRES_MINUTES
-        refresh_days = app_settings.REFRESH_TOKEN_EXPIRES_DAYS
-        
-        access = create_token(str(user.id), str(user.organization_id), minutes=access_minutes, token_type="access")
-        refresh = create_token(str(user.id), str(user.organization_id), days=refresh_days, token_type="refresh")
-        
-        # Store refresh token
-        payload_data = decode_token(refresh)
-        rt = RefreshToken(
-            user_id=user.id,
-            jti=payload_data["jti"],
-            expires_at=datetime.fromtimestamp(payload_data["exp"], tz=timezone.utc),
-            revoked=False,
-        )
-        db.add(rt)
-        await db.flush()
-        
         audit_log("user.login", None, "user", str(user.id), {"email": payload.email})
-        return TokenResponse(access_token=access, refresh_token=refresh, expires_in=access_minutes * 60)
+        return TokenResponse(access_token=access, refresh_token=refresh, expires_in=expires_in)
         
+    except ValueError as e:
+        # AuthService raises ValueError with specific messages
+        error_msg = str(e)
+        if "locked" in error_msg.lower():
+            raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail=error_msg)
+        elif "attempts remaining" in error_msg:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=error_msg)
+        else:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=error_msg)
     except HTTPException:
         raise
     except Exception as e:
@@ -254,13 +202,11 @@ async def change_password(
         )
     
     # Update password
-    user_repo = UserRepository(db)
     current_user.password_hash = hasher.hash(payload.new_password)
-    db.add(current_user)
     await db.flush()
     
     # Revoke all sessions for security
-    svc = AuthService(db)
+    svc = AuthService(db, redis_client)
     count = await svc.revoke_all_sessions(str(current_user.id))
     
     audit_log("user.password_changed", str(current_user.id), "security", str(current_user.id), {"sessions_revoked": count})
@@ -370,79 +316,28 @@ async def verify_otp_for_external_user(
     User must exist in database (created during partner onboarding or as sub-user).
     """
     from backend.modules.user_onboarding.services.otp_service import OTPService
-    from backend.modules.settings.repositories.settings_repositories import UserRepository
     from backend.core.auth.jwt import create_token
-    
-    otp_service = OTPService(redis_client)
-    user_repo = UserRepository(db)
-    
-    # Verify OTP
-    await otp_service.verify_otp(payload.mobile_number, payload.otp)
-    
-    # Get user by mobile number
-    user = await user_repo.get_by_mobile(payload.mobile_number)
-    
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found. Please complete partner onboarding first."
-        )
-    
-    # Verify user is EXTERNAL type
-    if user.user_type not in ['EXTERNAL']:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="This login method is only for EXTERNAL users (business partners). INTERNAL users must use email/password."
-        )
-    
-    if not user.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="User account is inactive. Please contact support."
-        )
-    
-    # Generate JWT tokens
     from backend.modules.settings.services.settings_services import AuthService
-    from backend.core.settings.config import settings
-    svc = AuthService(db)
     
-    # Use business_partner_id for EXTERNAL users
-    org_or_partner_id = str(user.business_partner_id) if user.business_partner_id else None
+    otp_service = OTPService(db, redis_client)
+    svc = AuthService(db, redis_client)
     
-    if not org_or_partner_id:
+    try:
+        # Verify OTP
+        await otp_service.verify_otp(payload.mobile_number, payload.otp)
+        
+        # Login with OTP (handles all validation and token generation)
+        access, refresh, expires_in = await svc.login_with_otp(payload.mobile_number)
+        
+        audit_log("user.otp_login", None, "external_auth", None, {"mobile": payload.mobile_number})
+        
+        return TokenResponse(access_token=access, refresh_token=refresh, expires_in=expires_in)
+    
+    except ValueError as e:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="User has no associated business partner"
+            status_code=status.HTTP_400_BAD_REQUEST if "not found" in str(e).lower() else status.HTTP_403_FORBIDDEN,
+            detail=str(e)
         )
-    
-    access_minutes = settings.ACCESS_TOKEN_EXPIRES_MINUTES
-    refresh_days = settings.REFRESH_TOKEN_EXPIRES_DAYS
-    
-    access = create_token(str(user.id), org_or_partner_id, minutes=access_minutes, token_type="access")
-    refresh = create_token(str(user.id), org_or_partner_id, days=refresh_days, token_type="refresh")
-    
-    # Store refresh token
-    from backend.modules.settings.models.settings_models import RefreshToken
-    from backend.core.auth.jwt import decode_token
-    from datetime import datetime, timezone
-    
-    payload_data = decode_token(refresh)
-    rt = RefreshToken(
-        user_id=user.id,
-        jti=payload_data["jti"],
-        expires_at=datetime.fromtimestamp(payload_data["exp"], tz=timezone.utc),
-        revoked=False,
-    )
-    db.add(rt)
-    await db.flush()
-    
-    audit_log("user.otp_login", str(user.id), "external_auth", str(user.id), {"mobile": payload.mobile_number})
-    
-    return TokenResponse(
-        access_token=access,
-        refresh_token=refresh,
-        expires_in=access_minutes * 60
-    )
 
 
 @router.post("/auth/logout", tags=["auth"])

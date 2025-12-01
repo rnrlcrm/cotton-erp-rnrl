@@ -399,5 +399,113 @@ class AuthService:
 		"""Disable 2FA for a user."""
 		from uuid import UUID
 		await self.user_repo.disable_2fa(UUID(user_id))
+	
+	async def login_with_lockout(self, email: str, password: str, lockout_service) -> tuple[User, str, str, int, bool]:
+		"""
+		Login with account lockout protection.
+		Returns: (user, access_token, refresh_token, expires_in, requires_2fa)
+		Raises: ValueError with specific error messages for the router to handle
+		"""
+		# Check if account is locked
+		is_locked, ttl = await lockout_service.is_locked(email)
+		if is_locked:
+			raise ValueError(f"Account locked due to too many failed login attempts. Try again in {ttl // 60} minutes.")
+		
+		# Get user
+		user = await self.user_repo.get_by_email(email)
+		if not user:
+			await lockout_service.record_failed_attempt(email)
+			raise ValueError("Invalid credentials")
+		
+		# Check user type
+		if user.user_type not in ['INTERNAL', 'SUPER_ADMIN']:
+			raise ValueError("EXTERNAL users must login via mobile OTP")
+		
+		if not user.is_active:
+			raise ValueError("User account is inactive")
+		
+		# Verify password
+		if not self.hasher.verify(password, user.password_hash):
+			lockout_info = await lockout_service.record_failed_attempt(email)
+			if lockout_info["locked"]:
+				raise ValueError(lockout_info["message"])
+			raise ValueError(f"Invalid credentials. {lockout_info['remaining_attempts']} attempts remaining.")
+		
+		# Clear failed attempts on successful password verification
+		await lockout_service.clear_failed_attempts(email)
+		
+		# Check if 2FA is enabled
+		if user.two_fa_enabled:
+			return (user, "", "", 0, True)  # Signal 2FA required
+		
+		# Generate tokens
+		access_minutes = settings.ACCESS_TOKEN_EXPIRES_MINUTES
+		refresh_days = settings.REFRESH_TOKEN_EXPIRES_DAYS
+		access = create_token(str(user.id), str(user.organization_id), minutes=access_minutes, token_type="access")
+		refresh = create_token(str(user.id), str(user.organization_id), days=refresh_days, token_type="refresh")
+		
+		# Store refresh token
+		from backend.core.auth.jwt import decode_token
+		payload = decode_token(refresh)
+		rt = RefreshToken(
+			user_id=user.id,
+			jti=payload["jti"],
+			expires_at=datetime.fromtimestamp(payload["exp"], tz=timezone.utc),
+			revoked=False,
+		)
+		self.db.add(rt)
+		await self.db.flush()
+		
+		return (user, access, refresh, access_minutes * 60, False)
+	
+	async def login_with_otp(self, mobile_number: str) -> tuple[str, str, int]:
+		"""
+		Login for EXTERNAL users with OTP.
+		Returns: (access_token, refresh_token, expires_in)
+		"""
+		# Get user by mobile number
+		user = await self.user_repo.get_by_mobile(mobile_number)
+		
+		if not user:
+			raise ValueError("User not found. Please complete partner onboarding first.")
+		
+		# Verify user is EXTERNAL type
+		if user.user_type not in ['EXTERNAL']:
+			raise ValueError("This login method is only for EXTERNAL users (business partners). INTERNAL users must use email/password.")
+		
+		if not user.is_active:
+			raise ValueError("User account is inactive. Please contact support.")
+		
+		# Use business_partner_id for EXTERNAL users
+		org_or_partner_id = str(user.business_partner_id) if user.business_partner_id else None
+		
+		if not org_or_partner_id:
+			raise ValueError("User has no associated business partner")
+		
+		# Generate tokens
+		access_minutes = settings.ACCESS_TOKEN_EXPIRES_MINUTES
+		refresh_days = settings.REFRESH_TOKEN_EXPIRES_DAYS
+		
+		access = create_token(str(user.id), org_or_partner_id, minutes=access_minutes, token_type="access")
+		refresh = create_token(str(user.id), org_or_partner_id, days=refresh_days, token_type="refresh")
+		
+		# Store refresh token
+		from backend.core.auth.jwt import decode_token
+		payload_data = decode_token(refresh)
+		rt = RefreshToken(
+			user_id=user.id,
+			jti=payload_data["jti"],
+			expires_at=datetime.fromtimestamp(payload_data["exp"], tz=timezone.utc),
+			revoked=False,
+		)
+		self.db.add(rt)
+		await self.db.flush()
+		
+		return (access, refresh, access_minutes * 60)
+
+
+
+
+
 
 

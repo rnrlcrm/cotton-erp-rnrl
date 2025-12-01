@@ -686,3 +686,19 @@ class MatchingService:
             "worker_running": self._running,
             "total_processed": self._metrics["total_processed"]
         }
+    
+    # ========================================================================
+    # REPOSITORY ACCESS METHODS (for router refactoring)
+    # ========================================================================
+    
+    async def get_requirement_by_id(self, requirement_id: UUID):
+        """Get requirement by ID - delegates to matching engine's repository"""
+        from backend.modules.trade_desk.repositories import RequirementRepository
+        req_repo = RequirementRepository(self.db)
+        return await req_repo.get_by_id(requirement_id)
+    
+    async def get_availability_by_id(self, availability_id: UUID):
+        """Get availability by ID - delegates to matching engine's repository"""
+        from backend.modules.trade_desk.repositories import AvailabilityRepository
+        avail_repo = AvailabilityRepository(self.db)
+        return await avail_repo.get_by_id(availability_id)

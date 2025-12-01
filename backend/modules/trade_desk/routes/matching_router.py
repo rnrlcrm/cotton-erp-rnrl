@@ -103,6 +103,32 @@ class MatchDetailsResponse(BaseModel):
 # DEPENDENCY INJECTION
 # ========================================================================
 
+def get_matching_service(db: AsyncSession = Depends(get_db), redis_client: redis.Redis = Depends(get_redis)) -> MatchingService:
+    """Dependency injection for MatchingService"""
+    config = MatchingConfig()
+    req_repo = RequirementRepository(db)
+    avail_repo = AvailabilityRepository(db)
+    risk_engine = RiskEngine(db)
+    scorer = MatchScorer(db, risk_engine, config)
+    
+    matching_engine = MatchingEngine(
+        db=db,
+        req_repo=req_repo,
+        avail_repo=avail_repo,
+        scorer=scorer,
+        config=config
+    )
+    
+    validator = MatchValidator(db, risk_engine, config)
+    
+    return MatchingService(
+        db=db,
+        matching_engine=matching_engine,
+        validator=validator,
+        config=config,
+        redis_client=redis_client
+    )
+
 def get_matching_engine(db: AsyncSession = Depends(get_db)) -> MatchingEngine:
     """Dependency injection for MatchingEngine"""
     config = MatchingConfig()
@@ -153,6 +179,7 @@ async def find_matches_for_requirement(
     current_user = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
     matching_engine: MatchingEngine = Depends(get_matching_engine),
+    matching_service: MatchingService = Depends(get_matching_service),
     idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key"),
     _check: None = Depends(RequireCapability(Capabilities.MATCHING_MANUAL))
 ) -> FindMatchesResponse:
@@ -161,9 +188,8 @@ async def find_matches_for_requirement(
     
     Security: User must own the requirement
     """
-    # Get requirement
-    req_repo = RequirementRepository(db)
-    requirement = await req_repo.get_by_id(requirement_id)
+    # Get requirement using service
+    requirement = await matching_service.get_requirement_by_id(requirement_id)
     
     if not requirement:
         raise HTTPException(
@@ -250,6 +276,7 @@ async def find_matches_for_availability(
     current_user = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
     matching_engine: MatchingEngine = Depends(get_matching_engine),
+    matching_service: MatchingService = Depends(get_matching_service),
     idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key"),
     _check: None = Depends(RequireCapability(Capabilities.MATCHING_MANUAL))
 ) -> FindMatchesResponse:
@@ -258,9 +285,8 @@ async def find_matches_for_availability(
     
     Security: User must own the availability
     """
-    # Get availability
-    avail_repo = AvailabilityRepository(db)
-    availability = await avail_repo.get_by_id(availability_id)
+    # Get availability using service
+    availability = await matching_service.get_availability_by_id(availability_id)
     
     if not availability:
         raise HTTPException(
@@ -345,6 +371,7 @@ async def get_match_details(
     current_user = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
     matching_engine: MatchingEngine = Depends(get_matching_engine),
+    matching_service: MatchingService = Depends(get_matching_service),
     validator: MatchValidator = Depends(get_match_validator)
 ) -> MatchDetailsResponse:
     """
@@ -352,12 +379,9 @@ async def get_match_details(
     
     Security: Only buyer or seller can access their match details
     """
-    # Get requirement and availability
-    req_repo = RequirementRepository(db)
-    avail_repo = AvailabilityRepository(db)
-    
-    requirement = await req_repo.get_by_id(requirement_id)
-    availability = await avail_repo.get_by_id(availability_id)
+    # Get requirement and availability using service
+    requirement = await matching_service.get_requirement_by_id(requirement_id)
+    availability = await matching_service.get_availability_by_id(availability_id)
     
     if not requirement or not availability:
         raise HTTPException(

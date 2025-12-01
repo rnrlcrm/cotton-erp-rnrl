@@ -75,7 +75,7 @@ async def send_otp(
     else:
         full_mobile = mobile
     
-    otp_service = OTPService(redis_client)
+    otp_service = OTPService(db, redis_client)
     
     try:
         result = await otp_service.send_otp(full_mobile)
@@ -132,7 +132,7 @@ async def verify_otp(
     _check: None = Depends(RequireCapability(Capabilities.PUBLIC_ACCESS))
 ):
     """Verify OTP and return JWT token with session. Requires PUBLIC_ACCESS capability (unauthenticated endpoint)."""
-    otp_service = OTPService(redis_client)
+    otp_service = OTPService(db, redis_client)
     user_service = UserAuthService(db, redis_client=redis_client)
     
     # Verify OTP

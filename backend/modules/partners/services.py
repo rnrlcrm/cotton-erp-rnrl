@@ -73,8 +73,10 @@ class GSTVerificationService:
     Auto-fetches business details from GSTN API to minimize user data entry.
     """
     
-    def __init__(self):
-        pass
+    def __init__(self, db: AsyncSession, redis_client: Optional[redis.Redis] = None):
+        self.db = db
+        self.redis = redis_client
+        self.outbox_repo = OutboxRepository(db)
     
     @api_circuit_breaker  # 3 retries, 60s timeout, exponential backoff
     async def verify_gstin(self, gstin: str) -> GSTVerificationResult:
@@ -166,7 +168,10 @@ class GeocodingService:
     Auto-verifies locations without user confirmation if confidence >90%.
     """
     
-    def __init__(self):
+    def __init__(self, db: AsyncSession, redis_client: Optional[redis.Redis] = None):
+        self.db = db
+        self.redis = redis_client
+        self.outbox_repo = OutboxRepository(db)
         self.api_key = None  # TODO: Load from settings
     
     async def geocode_address(self, address: str, city: str, state: str, postal_code: str) -> Dict:
@@ -228,8 +233,10 @@ class RTOVerificationService:
     For transporters adding vehicle details.
     """
     
-    def __init__(self):
-        pass
+    def __init__(self, db: AsyncSession, redis_client: Optional[redis.Redis] = None):
+        self.db = db
+        self.redis = redis_client
+        self.outbox_repo = OutboxRepository(db)
     
     async def verify_vehicle_rc(self, registration_number: str) -> Dict:
         """
@@ -270,8 +277,10 @@ class DocumentProcessingService:
     Auto-extracts data from uploaded documents to minimize user typing.
     """
     
-    def __init__(self):
-        pass
+    def __init__(self, db: AsyncSession, redis_client: Optional[redis.Redis] = None):
+        self.db = db
+        self.redis = redis_client
+        self.outbox_repo = OutboxRepository(db)
     
     async def extract_gst_certificate(self, file_url: str) -> Dict:
         """
@@ -366,8 +375,10 @@ class RiskScoringService:
     - High risk (<40): Director approval
     """
     
-    def __init__(self):
-        pass
+    def __init__(self, db: AsyncSession, redis_client: Optional[redis.Redis] = None):
+        self.db = db
+        self.redis = redis_client
+        self.outbox_repo = OutboxRepository(db)
     
     async def calculate_risk_score(
         self,
@@ -1313,3 +1324,161 @@ class PartnerService:
         
         await self.db.commit()
         return vehicle
+    
+    # Methods for router refactoring - clean architecture
+    async def get_application_by_id(self, application_id: UUID) -> Optional[PartnerOnboardingApplication]:
+        """Get onboarding application by ID"""
+        return await self.app_repo.get_by_id(application_id, self.organization_id)
+    
+    async def get_partner_by_id(self, partner_id: UUID) -> Optional[BusinessPartner]:
+        """Get partner by ID"""
+        return await self.bp_repo.get_by_id(partner_id, self.organization_id)
+    
+    async def list_all_partners(
+        self,
+        skip: int = 0,
+        limit: int = 100,
+        partner_type: Optional[PartnerType] = None,
+        status: Optional[PartnerStatus] = None,
+        kyc_status: Optional[KYCStatus] = None,
+        search: Optional[str] = None
+    ) -> List[BusinessPartner]:
+        """List all partners with filters"""
+        return await self.bp_repo.list_all(
+            organization_id=self.organization_id,
+            skip=skip,
+            limit=limit,
+            partner_type=partner_type,
+            status=status,
+            kyc_status=kyc_status,
+            search=search
+        )
+    
+    async def get_partner_locations(self, partner_id: UUID) -> List[PartnerLocation]:
+        """Get all locations for a partner"""
+        return await self.location_repo.get_by_partner(partner_id)
+    
+    async def get_partner_employees(self, partner_id: UUID) -> List[PartnerEmployee]:
+        """Get all employees for a partner"""
+        return await self.employee_repo.get_by_partner(partner_id)
+    
+    async def get_partner_vehicles(self, partner_id: UUID) -> List[PartnerVehicle]:
+        """Get all vehicles for a partner"""
+        return await self.vehicle_repo.get_by_partner(partner_id)
+    
+    async def get_partner_documents(self, partner_id: UUID) -> List[PartnerDocument]:
+        """Get all documents for a partner"""
+        return await self.document_repo.get_by_partner(partner_id)
+    
+    async def get_partner_export_data(
+        self,
+        partner_type: Optional[PartnerType] = None,
+        status: Optional[PartnerStatus] = None,
+        kyc_status: Optional[KYCStatus] = None,
+        state: Optional[str] = None,
+        date_from: Optional[datetime] = None,
+        date_to: Optional[datetime] = None
+    ) -> List[BusinessPartner]:
+        """Get partners for export"""
+        return await self.bp_repo.get_for_export(
+            organization_id=self.organization_id,
+            partner_type=partner_type,
+            status=status,
+            kyc_status=kyc_status,
+            state=state,
+            date_from=date_from,
+            date_to=date_to
+        )
+    
+    async def search_partners_advanced(
+        self,
+        partner_type: Optional[PartnerType] = None,
+        status: Optional[PartnerStatus] = None,
+        kyc_status: Optional[KYCStatus] = None,
+        kyc_expiring_days: Optional[int] = None,
+        risk_category: Optional[str] = None,
+        state: Optional[str] = None,
+        date_from: Optional[str] = None,
+        date_to: Optional[str] = None,
+        search: Optional[str] = None,
+        sort_by: str = "created_at",
+        sort_order: str = "desc",
+        skip: int = 0,
+        limit: int = 50
+    ) -> Dict:
+        """Advanced partner search with filters, sorting, and pagination"""
+        from sqlalchemy import select, func, or_, and_, desc, asc
+        from datetime import timedelta
+        from backend.modules.partners.models import BusinessPartner
+        
+        # Base query
+        query = select(BusinessPartner).where(
+            BusinessPartner.organization_id == self.organization_id,
+            BusinessPartner.is_deleted == False
+        )
+        
+        # Apply filters
+        if partner_type:
+            query = query.where(BusinessPartner.partner_type == partner_type)
+        
+        if status:
+            query = query.where(BusinessPartner.status == status)
+        
+        if kyc_status:
+            query = query.where(BusinessPartner.kyc_status == kyc_status)
+        
+        if kyc_expiring_days:
+            expiry_threshold = datetime.utcnow() + timedelta(days=kyc_expiring_days)
+            query = query.where(
+                and_(
+                    BusinessPartner.kyc_expiry_date <= expiry_threshold,
+                    BusinessPartner.kyc_expiry_date >= datetime.utcnow()
+                )
+            )
+        
+        if risk_category:
+            query = query.where(BusinessPartner.risk_category == risk_category)
+        
+        if state:
+            query = query.where(BusinessPartner.primary_state == state)
+        
+        if date_from:
+            query = query.where(BusinessPartner.created_at >= datetime.fromisoformat(date_from))
+        
+        if date_to:
+            query = query.where(BusinessPartner.created_at <= datetime.fromisoformat(date_to))
+        
+        if search:
+            search_pattern = f"%{search}%"
+            query = query.where(
+                or_(
+                    BusinessPartner.legal_business_name.ilike(search_pattern),
+                    BusinessPartner.trade_name.ilike(search_pattern),
+                    BusinessPartner.tax_id_number.ilike(search_pattern),
+                    BusinessPartner.pan_number.ilike(search_pattern)
+                )
+            )
+        
+        # Get total count
+        count_query = select(func.count()).select_from(query.subquery())
+        total = await self.db.scalar(count_query)
+        
+        # Apply sorting
+        if sort_order == "desc":
+            query = query.order_by(desc(getattr(BusinessPartner, sort_by)))
+        else:
+            query = query.order_by(asc(getattr(BusinessPartner, sort_by)))
+        
+        # Apply pagination
+        query = query.offset(skip).limit(limit)
+        
+        # Execute
+        result = await self.db.execute(query)
+        partners = result.scalars().all()
+        
+        return {
+            "total": total,
+            "skip": skip,
+            "limit": limit,
+            "data": partners
+        }

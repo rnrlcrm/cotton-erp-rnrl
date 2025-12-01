@@ -11,13 +11,18 @@ from typing import Optional
 
 import redis.asyncio as redis
 from fastapi import HTTPException, status
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from backend.core.outbox import OutboxRepository
 
 
 class OTPService:
     """Handle OTP generation, storage, and verification"""
     
-    def __init__(self, redis_client: redis.Redis):
+    def __init__(self, db: AsyncSession, redis_client: redis.Redis):
+        self.db = db
         self.redis = redis_client
+        self.outbox_repo = OutboxRepository(db)
         self.otp_ttl = 300  # 5 minutes
         self.max_attempts = 3
         self.rate_limit_window = 60  # 1 minute between OTP requests
