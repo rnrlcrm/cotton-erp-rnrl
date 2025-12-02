@@ -9,7 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 import redis.asyncio as redis
 
-from backend.core.rbac.permissions import PermissionCodes
+from backend.core.auth.capabilities.definitions import Capabilities
 from backend.core.auth.passwords import PasswordHasher
 from backend.core.auth.jwt import create_token
 from backend.core.settings.config import settings
@@ -61,8 +61,9 @@ class SeedService:
 
 	async def seed_defaults(self, org_name: str, admin_email: str, admin_password: str) -> None:
 		org = await self.org_repo.get_by_name(org_name) or await self.org_repo.create(org_name)
-		# permissions
-		perms = await self.perm_repo.ensure_many(PermissionCodes.all())
+		# permissions - use all Capabilities enum values
+		all_capability_codes = [c.value for c in Capabilities]
+		perms = await self.perm_repo.ensure_many(all_capability_codes)
 		# admin role
 		role = await self.role_repo.get_by_name("admin") or await self.role_repo.create("admin", "Administrator")
 		await self.role_perm_repo.ensure(role.id, [p.id for p in perms])

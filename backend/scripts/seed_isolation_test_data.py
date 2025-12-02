@@ -22,7 +22,7 @@ from datetime import datetime, timezone
 from sqlalchemy.orm import Session
 
 from backend.db.session_module import SessionLocal
-from backend.modules.settings.business_partners.models import BusinessPartner
+from backend.modules.partners.models import BusinessPartner
 from backend.modules.settings.models.settings_models import User
 from backend.modules.settings.organization.models import Organization
 from passlib.context import CryptContext

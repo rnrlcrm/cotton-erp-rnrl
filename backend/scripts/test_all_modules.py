@@ -17,7 +17,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from sqlalchemy import text
 from backend.db.session_module import SessionLocal
-from backend.modules.settings.business_partners.models import BusinessPartner
+from backend.modules.partners.models import BusinessPartner
 from backend.modules.settings.models.settings_models import User
 from backend.modules.settings.organization.models import Organization
 

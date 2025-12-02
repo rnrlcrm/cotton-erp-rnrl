@@ -97,6 +97,36 @@ class Capabilities(str, Enum):
     MATCHING_CONFIGURE_RULES = "MATCHING_CONFIGURE_RULES"
     MATCHING_MANUAL = "MATCHING_MANUAL"  # Manual matching operations
     
+    # ==================== SETTINGS MODULE ====================
+    SETTINGS_VIEW_ALL = "SETTINGS_VIEW_ALL"
+    SETTINGS_MANAGE_ORGANIZATIONS = "SETTINGS_MANAGE_ORGANIZATIONS"
+    SETTINGS_MANAGE_COMMODITIES = "SETTINGS_MANAGE_COMMODITIES"
+    SETTINGS_MANAGE_LOCATIONS = "SETTINGS_MANAGE_LOCATIONS"
+    
+    # ==================== INVOICE MODULE ====================
+    INVOICE_CREATE_ANY_BRANCH = "INVOICE_CREATE_ANY_BRANCH"
+    INVOICE_VIEW_ALL_BRANCHES = "INVOICE_VIEW_ALL_BRANCHES"
+    INVOICE_VIEW_OWN = "INVOICE_VIEW_OWN"
+    
+    # ==================== CONTRACT MODULE ====================
+    CONTRACT_VIEW_OWN = "CONTRACT_VIEW_OWN"
+    
+    # ==================== PAYMENT MODULE ====================
+    PAYMENT_VIEW_OWN = "PAYMENT_VIEW_OWN"
+    
+    # ==================== SHIPMENT MODULE ====================
+    SHIPMENT_VIEW_OWN = "SHIPMENT_VIEW_OWN"
+    
+    # ==================== DATA PRIVACY & GDPR ====================
+    DATA_EXPORT_OWN = "DATA_EXPORT_OWN"
+    DATA_DELETE_OWN = "DATA_DELETE_OWN"
+    DATA_EXPORT_ALL = "DATA_EXPORT_ALL"  # Super Admin only
+    DATA_DELETE_ALL = "DATA_DELETE_ALL"  # Super Admin only
+    
+    # ==================== AUDIT & COMPLIANCE ====================
+    AUDIT_VIEW_ALL = "AUDIT_VIEW_ALL"
+    AUDIT_EXPORT = "AUDIT_EXPORT"
+    
     # ==================== ADMIN CAPABILITIES ====================
     ADMIN_MANAGE_USERS = "ADMIN_MANAGE_USERS"
     ADMIN_MANAGE_ROLES = "ADMIN_MANAGE_ROLES"
@@ -244,6 +274,68 @@ CAPABILITY_METADATA = {
         "name": "View All Data",
         "description": "Access all data across all organizations (super admin)",
         "category": "admin",
+        "is_system": True,
+    },
+    
+    # Settings
+    Capabilities.SETTINGS_VIEW_ALL: {
+        "name": "View All Settings",
+        "description": "View all system settings (super admin)",
+        "category": "settings",
+        "is_system": True,
+    },
+    Capabilities.SETTINGS_MANAGE_ORGANIZATIONS: {
+        "name": "Manage Organizations",
+        "description": "Create and manage organizations",
+        "category": "settings",
+        "is_system": False,
+    },
+    
+    # Invoice
+    Capabilities.INVOICE_CREATE_ANY_BRANCH: {
+        "name": "Create Invoice (Any Branch)",
+        "description": "Create invoices for any branch",
+        "category": "invoice",
+        "is_system": False,
+    },
+    Capabilities.INVOICE_VIEW_ALL_BRANCHES: {
+        "name": "View Invoices (All Branches)",
+        "description": "View invoices across all branches",
+        "category": "invoice",
+        "is_system": False,
+    },
+    
+    # GDPR
+    Capabilities.DATA_EXPORT_OWN: {
+        "name": "Export Own Data",
+        "description": "Export personal data (GDPR compliance)",
+        "category": "privacy",
+        "is_system": False,
+    },
+    Capabilities.DATA_DELETE_OWN: {
+        "name": "Delete Own Data",
+        "description": "Request deletion of personal data (GDPR compliance)",
+        "category": "privacy",
+        "is_system": False,
+    },
+    Capabilities.DATA_EXPORT_ALL: {
+        "name": "Export All Data",
+        "description": "Export any user's data (super admin)",
+        "category": "privacy",
+        "is_system": True,
+    },
+    
+    # Audit
+    Capabilities.AUDIT_VIEW_ALL: {
+        "name": "View Audit Logs",
+        "description": "Access complete audit trail",
+        "category": "audit",
+        "is_system": True,
+    },
+    Capabilities.AUDIT_EXPORT: {
+        "name": "Export Audit Logs",
+        "description": "Export audit logs for compliance",
+        "category": "audit",
         "is_system": True,
     },
     

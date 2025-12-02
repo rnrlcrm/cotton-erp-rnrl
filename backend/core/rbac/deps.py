@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from backend.db.async_session import get_db
 from backend.modules.settings.repositories.settings_repositories import UserRepository
 from backend.modules.settings.services.settings_services import RBACService
-from .permissions import PermissionCodes
+from backend.core.auth.capabilities.definitions import Capabilities
 
 
 async def get_current_user(
@@ -26,7 +26,7 @@ async def get_current_user(
     return user
 
 
-def require_permissions(*required: PermissionCodes) -> Callable:
+def require_permissions(*required: Capabilities) -> Callable:
     async def _dep(
         user=Depends(get_current_user), db: AsyncSession = Depends(get_db)
     ):  # noqa: ANN001 - FastAPI dynamic typing
