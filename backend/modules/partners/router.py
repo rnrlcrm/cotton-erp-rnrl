@@ -424,9 +424,17 @@ async def reject_partner(
 
 @router.get(
     "/",
-    response_model=List[BusinessPartnerResponse],
-    summary="List Partners",
-    description="List all business partners with filters"
+    response_model=Dict[str, Any],
+    summary="List Partners with Filters",
+    description="""
+    List all business partners with optional advanced filtering:
+    - Partner type, status, KYC status
+    - KYC expiring in N days
+    - State-wise filtering
+    - Date range filtering
+    - Full-text search on business name/GSTIN
+    - Risk category filtering
+    """
 )
 async def list_partners(
     skip: int = 0,
@@ -434,20 +442,46 @@ async def list_partners(
     partner_type: Optional[PartnerType] = None,
     status: Optional[PartnerStatus] = None,
     kyc_status: Optional[KYCStatus] = None,
+    kyc_expiring_days: Optional[int] = None,
+    risk_category: Optional[RiskCategory] = None,
+    state: Optional[str] = None,
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
     search: Optional[str] = None,
-    partner_service: PartnerService = Depends(get_partner_service)
+    sort_by: str = "created_at",
+    sort_order: str = "desc",
+    partner_service: PartnerService = Depends(get_partner_service),
+    organization_id: UUID = Depends(get_current_organization_id)
 ):
     """List all partners with filters (auto-isolated by organization)"""
-    partners = await partner_service.list_all_partners(
-        skip=skip,
-        limit=limit,
-        partner_type=partner_type,
-        status=status,
-        kyc_status=kyc_status,
-        search=search
-    )
-    
-    return partners
+    # Use advanced search if any advanced filters are provided
+    if any([kyc_expiring_days, risk_category, state, date_from, date_to, sort_by != "created_at", sort_order != "desc"]):
+        return await partner_service.search_partners_advanced(
+            partner_type=partner_type,
+            status=status,
+            kyc_status=kyc_status,
+            kyc_expiring_days=kyc_expiring_days,
+            risk_category=risk_category,
+            state=state,
+            date_from=date_from,
+            date_to=date_to,
+            search=search,
+            sort_by=sort_by,
+            sort_order=sort_order,
+            skip=skip,
+            limit=limit
+        )
+    else:
+        # Use simple list for basic queries
+        partners = await partner_service.list_all_partners(
+            skip=skip,
+            limit=limit,
+            partner_type=partner_type,
+            status=status,
+            kyc_status=kyc_status,
+            search=search
+        )
+        return {"results": partners, "total": len(partners)}
 
 
 @router.get(
@@ -885,54 +919,6 @@ async def add_vehicle(
     )
     
     return new_vehicle
-
-
-@router.get(
-    "/",
-    response_model=Dict[str, Any],
-    summary="List Partners with Advanced Filters",
-    description="""
-    Get partners with advanced filtering:
-    - KYC expiring in N days
-    - State-wise filtering
-    - Date range filtering
-    - Full-text search on business name/GSTIN
-    - Risk category filtering
-    """
-)
-async def list_partners_advanced(
-    partner_type: Optional[PartnerType] = None,
-    status: Optional[PartnerStatus] = None,
-    kyc_status: Optional[KYCStatus] = None,
-    kyc_expiring_days: Optional[int] = None,
-    risk_category: Optional[RiskCategory] = None,
-    state: Optional[str] = None,
-    date_from: Optional[str] = None,
-    date_to: Optional[str] = None,
-    search: Optional[str] = None,
-    sort_by: str = "created_at",
-    sort_order: str = "desc",
-    skip: int = 0,
-    limit: int = 50,
-    partner_service: PartnerService = Depends(get_partner_service),
-    organization_id: UUID = Depends(get_current_organization_id)
-):
-    """List partners with advanced filters"""
-    return await partner_service.search_partners_advanced(
-        partner_type=partner_type,
-        status=status,
-        kyc_status=kyc_status,
-        kyc_expiring_days=kyc_expiring_days,
-        risk_category=risk_category,
-        state=state,
-        date_from=date_from,
-        date_to=date_to,
-        search=search,
-        sort_by=sort_by,
-        sort_order=sort_order,
-        skip=skip,
-        limit=limit
-    )
 
 
 # ===== EXPORT FUNCTIONALITY =====

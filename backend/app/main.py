@@ -22,7 +22,7 @@ from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExport
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 from backend.core.settings.config import settings
 from sqlalchemy import text
-from backend.db.session import SessionLocal
+from backend.db.async_session import async_engine
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
@@ -96,40 +96,54 @@ def create_app() -> FastAPI:
 			print("⚠ PII filter not available")
 		except Exception as e:
 			print(f"⚠ Failed to enable PII filter: {e}")
-	# OpenTelemetry instrumentation (GCP-native for 15-year architecture)
+	# OpenTelemetry instrumentation (GCP-native for production)
 	otlp_endpoint = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT")
 	gcp_project_id = os.getenv("GCP_PROJECT_ID")
+	enable_tracing = os.getenv("ENABLE_TRACING", "false").lower() == "true"
 	
-	if gcp_project_id:
-		# Production: Use GCP Cloud Trace and Cloud Monitoring
-		try:
-			from backend.core.observability.gcp import configure_gcp_observability, instrument_application
-			
-			config = configure_gcp_observability(
-				service_name="cotton-erp-backend",
-				project_id=gcp_project_id,
-				enable_traces=True,
-				enable_metrics=True,
-			)
-			print(f"✓ GCP Observability configured: {config}")
-			
-			# Auto-instrument (will be done after app creation)
-			# instrument_application(app, db_engine)
-			
-		except ImportError:
-			print("⚠ GCP observability libraries not installed")
-			print("  Install: pip install opentelemetry-exporter-gcp-trace opentelemetry-exporter-gcp-monitoring")
-		except Exception as e:
-			print(f"⚠ Failed to configure GCP observability: {e}")
-	
-	elif otlp_endpoint:
-		# Development/Custom: Use OTLP endpoint (original behavior)
-		resource = Resource(attributes={"service.name": "cotton-erp-backend"})
-		provider = TracerProvider(resource=resource)
-		span_exporter = OTLPSpanExporter(endpoint=otlp_endpoint)
-		provider.add_span_processor(BatchSpanProcessor(span_exporter))
-		trace.set_tracer_provider(provider)
-		FastAPIInstrumentor.instrument_app(app, tracer_provider=provider)
+	if enable_tracing:
+		if gcp_project_id:
+			# Production: Use GCP Cloud Trace and Cloud Monitoring
+			try:
+				from backend.core.observability.gcp import configure_gcp_observability, instrument_application
+				
+				config = configure_gcp_observability(
+					service_name="cotton-erp-backend",
+					project_id=gcp_project_id,
+					enable_traces=True,
+					enable_metrics=True,
+				)
+				print(f"✓ GCP Observability configured: {config}")
+				
+				# Instrument app after creation
+				instrument_application(app, async_engine)
+				
+			except ImportError:
+				print("⚠ GCP observability libraries not installed")
+				print("  Install: pip install opentelemetry-exporter-gcp-trace opentelemetry-exporter-gcp-monitoring")
+			except Exception as e:
+				print(f"⚠ Failed to configure GCP observability: {e}")
+		
+		elif otlp_endpoint:
+			# Development/Custom: Use OTLP endpoint
+			try:
+				resource = Resource(attributes={
+					"service.name": "cotton-erp-backend",
+					"service.version": "1.0.0",
+					"deployment.environment": os.getenv("ENV", "development")
+				})
+				provider = TracerProvider(resource=resource)
+				span_exporter = OTLPSpanExporter(endpoint=otlp_endpoint)
+				provider.add_span_processor(BatchSpanProcessor(span_exporter))
+				trace.set_tracer_provider(provider)
+				FastAPIInstrumentor.instrument_app(app, tracer_provider=provider)
+				print(f"✓ OpenTelemetry tracing enabled: {otlp_endpoint}")
+			except Exception as e:
+				print(f"⚠ Failed to configure OpenTelemetry: {e}")
+		else:
+			print("ℹ Tracing enabled but no endpoint configured (set OTEL_EXPORTER_OTLP_ENDPOINT or GCP_PROJECT_ID)")
+	else:
+		print("ℹ OpenTelemetry tracing disabled (set ENABLE_TRACING=true to enable)")
 	# Middlewares (order matters: RequestID → Idempotency → Auth → Isolation → Security → CORS)
 	app.add_middleware(RequestIDMiddleware)
 	app.add_middleware(IdempotencyMiddleware)  # Add idempotency BEFORE auth (caching layer)
@@ -166,10 +180,10 @@ def create_app() -> FastAPI:
 		return {"status": "ok"}
 
 	@app.get("/ready")
-	def readiness() -> dict:
+	async def readiness() -> dict:
 		try:
-			with SessionLocal() as s:
-				s.execute(text("SELECT 1"))
+			async with async_engine.connect() as conn:
+				await conn.execute(text("SELECT 1"))
 			return {"ready": True}
 		except Exception:
 			return {"ready": False}
@@ -182,36 +196,19 @@ def create_app() -> FastAPI:
 	app.include_router(partners_router, prefix="/api/v1", tags=["partners"])
 	app.include_router(settings_router, prefix="/api/v1/settings", tags=["settings"])
 	
-	# Phase 2 Infrastructure Routers
+	# Infrastructure Routers (Single Registration)
 	from backend.api.v1.websocket import router as websocket_router
 	from backend.api.v1.webhooks import router as webhooks_router
-	# from backend.api.v1.ai import router as ai_router  # Requires langchain, chromadb (optional)
-	app.include_router(websocket_router, prefix="/api/v1", tags=["websocket"])
-	app.include_router(webhooks_router, prefix="/api/v1", tags=["webhooks"])
-	# app.include_router(ai_router, prefix="/api/v1", tags=["ai"])  # Optional: install langchain chromadb
-	
-	# Session Management (NEW)
-	from backend.modules.auth.router import router as session_router
-	app.include_router(session_router, prefix="/api/v1", tags=["sessions"])
-	
-	# Privacy & GDPR (NEW)
-	from backend.api.v1.privacy import router as privacy_router
-	app.include_router(privacy_router, prefix="/api/v1", tags=["privacy"])
-	
-	# WebSocket Real-time (NEW)
-	from backend.api.v1.websocket import router as websocket_router
-	app.include_router(websocket_router, prefix="/api/v1", tags=["websocket"])
-	
-	# Webhooks (NEW)
-	from backend.api.v1.webhooks import router as webhooks_router
-	app.include_router(webhooks_router, prefix="/api/v1", tags=["webhooks"])
-	
-	# Sync API (Mobile Offline-First)
 	from backend.api.v1.sync import router as sync_router
-	app.include_router(sync_router, prefix="/api/v1", tags=["sync"])
-	
-	# Risk Management Module (NEW)
+	from backend.api.v1.privacy import router as privacy_router
+	from backend.modules.auth.router import router as session_router
 	from backend.modules.risk.routes import router as risk_router
+	
+	app.include_router(websocket_router, prefix="/api/v1", tags=["websocket"])
+	app.include_router(webhooks_router, prefix="/api/v1", tags=["webhooks"])
+	app.include_router(sync_router, prefix="/api/v1", tags=["sync"])
+	app.include_router(privacy_router, prefix="/api/v1", tags=["privacy"])
+	app.include_router(session_router, prefix="/api/v1", tags=["sessions"])
 	app.include_router(risk_router, prefix="/api/v1", tags=["risk"])
 	
 	return app
