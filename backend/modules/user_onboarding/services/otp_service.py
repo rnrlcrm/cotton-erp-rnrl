@@ -165,7 +165,7 @@ class OTPService:
         print(f"\n{'='*60}")
         print(f"📱 SMS to {mobile_number}")
         print(f"{'='*60}")
-        print(f"Your Cotton ERP verification code is: {otp}")
+        print(f"Your Commodity ERP verification code is: {otp}")
         print(f"Valid for 5 minutes. Do not share this code.")
         print(f"{'='*60}\n")
         
@@ -176,7 +176,7 @@ class OTPService:
         
         client = Client(settings.TWILIO_ACCOUNT_SID, settings.TWILIO_AUTH_TOKEN)
         message = client.messages.create(
-            body=f"Your Cotton ERP verification code is: {otp}. Valid for 5 minutes.",
+            body=f"Your Commodity ERP verification code is: {otp}. Valid for 5 minutes.",
             from_=settings.TWILIO_PHONE_NUMBER,
             to=mobile_number
         )
@@ -201,6 +201,6 @@ class OTPService:
         sns = boto3.client('sns', region_name=settings.AWS_REGION)
         sns.publish(
             PhoneNumber=mobile_number,
-            Message=f"Your Cotton ERP verification code is: {otp}. Valid for 5 minutes."
+            Message=f"Your Commodity ERP verification code is: {otp}. Valid for 5 minutes."
         )
         """

@@ -105,7 +105,7 @@ class PartnerTools:
                 "broker_specific": [
                     "Service coverage areas",
                     "Commodities handled",
-                    "Years of experience in cotton trade"
+                    "Years of experience in commodity trade"
                 ],
                 "commission": "Commission rates configured after approval",
                 "note": "Sub-brokers must specify parent broker"

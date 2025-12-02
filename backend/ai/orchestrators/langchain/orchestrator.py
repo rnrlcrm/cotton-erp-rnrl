@@ -152,7 +152,7 @@ class ERPPrompts:
     """Common ERP prompt templates"""
     
     TRADE_ANALYSIS = """
-You are an AI assistant for a cotton trading ERP system.
+You are an AI assistant for a commodity trading ERP system.
 
 Analyze the following trade data and provide insights:
 {trade_data}

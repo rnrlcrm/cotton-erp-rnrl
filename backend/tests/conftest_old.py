@@ -1,5 +1,5 @@
 """
-Pytest configuration and shared fixtures for Cotton ERP tests.
+Pytest configuration and shared fixtures for Commodity ERP tests.
 """
 import os
 import sys

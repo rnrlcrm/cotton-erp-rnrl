@@ -157,7 +157,7 @@ def get_env_or_secret(
         return os.getenv(var_name, default)
 
 
-# Pre-defined secret mappings for Cotton ERP
+# Pre-defined secret mappings for Commodity ERP
 REQUIRED_SECRETS = [
     "DATABASE_URL",
     "SECRET_KEY",

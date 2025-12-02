@@ -1,5 +1,5 @@
 """
-Load testing script for Cotton ERP Backend.
+Load testing script for Commodity ERP Backend.
 
 Tests system capacity under high concurrent load:
 - 1000+ concurrent users
@@ -41,7 +41,7 @@ TEST_COMMODITIES = [
 
 class CottonERPUser(HttpUser):
     """
-    Simulates a typical Cotton ERP user performing various operations.
+    Simulates a typical Commodity ERP user performing various operations.
     
     Task distribution:
     - 50%: Read operations (list, get)
@@ -245,7 +245,7 @@ class CottonERPUser(HttpUser):
 def on_locust_init(environment, **kwargs):
     """Initialize custom metrics tracking."""
     print("\n" + "="*80)
-    print("Cotton ERP Load Test Starting")
+    print("Commodity ERP Load Test Starting")
     print("="*80)
     print(f"Target: {environment.host}")
     print(f"Users: {environment.parsed_options.num_users if hasattr(environment, 'parsed_options') else 'N/A'}")
@@ -258,7 +258,7 @@ def on_test_stop(environment, **kwargs):
     stats = environment.stats
     
     print("\n" + "="*80)
-    print("Cotton ERP Load Test Results")
+    print("Commodity ERP Load Test Results")
     print("="*80)
     print(f"Total Requests: {stats.total.num_requests}")
     print(f"Failed Requests: {stats.total.num_failures}")

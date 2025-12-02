@@ -168,7 +168,7 @@ def sample_seller(db_session: Session, mock_user):
     """Create sample seller business partner."""
     seller = BusinessPartner(
         id=mock_user.business_partner_id,
-        name="Test Cotton Trader",
+        name="Test Commodity Trader",
         partner_type="SELLER",
         is_active=True,
         created_at=datetime.now(timezone.utc)

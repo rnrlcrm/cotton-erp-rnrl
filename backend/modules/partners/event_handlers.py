@@ -117,7 +117,7 @@ New Value: {event.new_value}
 The changes are now effective.
 
 Regards,
-Cotton ERP Team
+Commodity ERP Team
 """
             )
     
@@ -141,6 +141,6 @@ Reason: {event.rejection_reason}
 Please contact support if you have questions.
 
 Regards,
-Cotton ERP Team
+Commodity ERP Team
 """
             )

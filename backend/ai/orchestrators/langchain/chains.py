@@ -44,7 +44,7 @@ class ConversationChain:
         
         # Default system message
         if system_message is None:
-            system_message = """You are an AI assistant for a Cotton Trading ERP system.
+            system_message = """You are an AI assistant for a Commodity Trading ERP system.
 
 You help users with:
 - Trade management

@@ -180,7 +180,7 @@ class PubSubDLQConfigurator:
     
     def setup_complete_dlq_infrastructure(self):
         """
-        Set up complete DLQ infrastructure for Cotton ERP.
+        Set up complete DLQ infrastructure for Commodity ERP.
         
         Creates:
         1. Main events topic (cotton-erp-events)

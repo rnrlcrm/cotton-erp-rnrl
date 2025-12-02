@@ -47,9 +47,9 @@ class TestOrganizationCRUD:
         service = OrganizationService(db_session, user_id)
         
         payload = OrganizationCreate(
-            name="Test Cotton Trading Co",
-            legal_name="Test Cotton Trading Company Private Limited",
-            type="cotton_trader",
+            name="Test Commodity Trading Co",
+            legal_name="Test Commodity Trading Company Private Limited",
+            type="commodity_trader",
             PAN="ABCDE1234F",
             CIN="U12345KA2020PTC123456",
             base_currency="INR",
@@ -57,7 +57,7 @@ class TestOrganizationCRUD:
             city="Mumbai",
             state="Maharashtra",
             pincode="400001",
-            contact_email="info@testcotton.com",
+            contact_email="info@testcommodity.com",
             contact_phone="+912212345678",
             threshold_limit=2500000,
             einvoice_required=True,

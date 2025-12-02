@@ -1,7 +1,7 @@
 .PHONY: help setup install clean test lint format docker-up docker-down docker-build migrate seed
 
 help:
-@echo "Cotton ERP - Available Commands"
+	@echo "Commodity ERP - Available Commands"
 @echo "================================"
 @echo "setup         - Initial project setup"
 @echo "install       - Install all dependencies"
@@ -19,7 +19,7 @@ help:
 @echo "dev-mobile    - Run mobile app"
 
 setup:
-@echo "Setting up Cotton ERP..."
+	@echo "Setting up Commodity ERP..."
 @cp .env.example .env
 @echo "Created .env file"
 @echo "Please update .env with your configuration"

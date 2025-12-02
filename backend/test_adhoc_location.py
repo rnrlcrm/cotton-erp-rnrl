@@ -49,7 +49,7 @@ async def test_adhoc_location():
         # 2. Create test seller
         seller = BusinessPartner(
             id=uuid4(),
-            legal_name="Surat Cotton Trader",
+            legal_name="Surat Commodity Trader",
             country="India",
             organization_id=DEFAULT_ORG_ID,
             entity_class="entity",

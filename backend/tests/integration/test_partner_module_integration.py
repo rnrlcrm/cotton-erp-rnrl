@@ -492,12 +492,12 @@ class TestPartnerCRUD:
         repo = BusinessPartnerRepository(db_session)
         partners = [
             BusinessPartner(
-                legal_name="Cotton Traders Pvt Ltd",
+                legal_name="Commodity Traders Pvt Ltd",
                 partner_type=PartnerType.TRADER,
                 country="India",
                 entity_class="business_entity",
                 status=PartnerStatus.APPROVED,
-                bank_account_name="Cotton Traders Pvt Ltd",
+                bank_account_name="Commodity Traders Pvt Ltd",
                 bank_name="HDFC Bank",
                 bank_account_number="1234567890",
                 bank_routing_code="HDFC0001234",

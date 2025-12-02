@@ -9,7 +9,7 @@ Compliance:
 - IT Act 2000 Section 43A: Reasonable Security Practices
 - Income Tax Act 1961: Audit Trail Requirements
 
-Author: Cotton ERP Security Team
+Author: Commodity ERP Security Team
 Date: November 22, 2025
 """
 

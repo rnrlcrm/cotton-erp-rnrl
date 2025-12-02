@@ -32,12 +32,12 @@ from backend.app.middleware.rate_limit import setup_rate_limiting
 
 def create_app() -> FastAPI:
 	app = FastAPI(
-		title="Cotton ERP API",
+		title="Commodity ERP API",
 		version="1.0.0",
 		description="""
-		## 2035-Ready Cotton Trading ERP System
+		## 2035-Ready Commodity Trading ERP System
 		
-		Complete ERP system for cotton trading with:
+		Complete ERP system for commodity trading with:
 		- 🔐 Zero-trust security (JWT rotation, RBAC)
 		- 📱 Mobile-first offline sync (WatermelonDB)
 		- ⚡ Real-time updates (WebSocket sharding)
@@ -66,7 +66,7 @@ def create_app() -> FastAPI:
 		redoc_url="/api/redoc",
 		openapi_url="/api/openapi.json",
 		contact={
-			"name": "Cotton ERP Support",
+			"name": "Commodity ERP Support",
 			"email": "support@cotton-erp.com",
 		},
 		license_info={

@@ -84,7 +84,7 @@ To renew:
 If you have any questions, please contact our support team.
 
 Regards,
-Cotton ERP Team
+Commodity ERP Team
 """
         
         # Send email
@@ -97,7 +97,7 @@ Cotton ERP Team
         
         # Send SMS for critical urgency
         if urgency == "CRITICAL":
-            sms_body = f"URGENT: Your KYC expires in {days_remaining} days. Renew now to avoid suspension. - Cotton ERP"
+            sms_body = f"URGENT: Your KYC expires in {days_remaining} days. Renew now to avoid suspension. - Commodity ERP"
             await self.sms_service.send(
                 to=partner.primary_contact_phone,
                 body=sms_body
@@ -177,10 +177,10 @@ You can now:
 
 {f'Approval Notes: {approval_notes}' if approval_notes else ''}
 
-Welcome to Cotton ERP!
+Welcome to Commodity ERP!
 
 Best regards,
-Cotton ERP Team
+Commodity ERP Team
 """
         
         await self.email_service.send(
@@ -203,7 +203,7 @@ Cotton ERP Team
         email_body = f"""
 Dear {partner_name},
 
-Thank you for your interest in partnering with Cotton ERP.
+Thank you for your interest in partnering with Commodity ERP.
 
 After careful review, we regret to inform you that we are unable to approve 
 your partner application at this time.
@@ -215,7 +215,7 @@ You may reapply after addressing the concerns mentioned above.
 If you have any questions, please contact our support team.
 
 Regards,
-Cotton ERP Team
+Commodity ERP Team
 """
         
         await self.email_service.send(
@@ -250,10 +250,10 @@ To reactivate your account:
 2. Contact our support team
 3. Complete any pending compliance requirements
 
-For assistance, please contact support@cottonerp.com
+For assistance, please contact support@commodityerp.com
 
 Regards,
-Cotton ERP Team
+Commodity ERP Team
 """
         
         await self.email_service.send(
@@ -266,7 +266,7 @@ Cotton ERP Team
         # Send SMS
         await self.sms_service.send(
             to=partner.primary_contact_phone,
-            body=f"Your Cotton ERP account has been suspended. Reason: {reason}. Contact support immediately."
+            body=f"Your Commodity ERP account has been suspended. Reason: {reason}. Contact support immediately."
         )
 
 

@@ -10,7 +10,7 @@ from enum import Enum
 
 class Capabilities(str, Enum):
     """
-    All capabilities in the Cotton ERP system.
+    All capabilities in the Commodity ERP system.
     
     Naming Convention: {MODULE}_{ACTION}
     - MODULE: auth, org, partner, commodity, location, availability, requirement, matching

@@ -1,7 +1,7 @@
 """
 Location Module
 
-Master location registry for the entire Cotton ERP system.
+Master location registry for the entire Commodity ERP system.
 All location data sourced from Google Maps API.
 
 Exports:
