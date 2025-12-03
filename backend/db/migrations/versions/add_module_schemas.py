@@ -2,7 +2,7 @@
 Add module-specific database schemas
 
 Revision ID: add_module_schemas
-Revises: <previous_revision>
+Revises: None
 Create Date: 2025-12-02
 
 Organizes database into module-specific schemas for better separation.
@@ -19,6 +19,12 @@ Schemas:
 
 from alembic import op
 import sqlalchemy as sa
+
+# revision identifiers, used by Alembic.
+revision = 'add_module_schemas'
+down_revision = None
+branch_labels = None
+depends_on = None
 
 
 # Module schemas to create

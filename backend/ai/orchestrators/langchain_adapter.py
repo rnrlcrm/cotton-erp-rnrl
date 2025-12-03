@@ -43,11 +43,13 @@ class LangChainOrchestratorAdapter(BaseAIOrchestrator):
             temperature=temperature,
         )
     
-    async def execute(self, request: AIRequest) -> AIResponse:
+    async def _execute_impl(self, request: AIRequest) -> AIResponse:
         """
         Execute AI request using LangChain.
         
         This translates standard AIRequest → LangChain call → standard AIResponse.
+        NOTE: This method is called by BaseAIOrchestrator.execute() AFTER
+        guardrails and memory loading.
         """
         start_time = time.time()
         request_id = str(uuid.uuid4())
@@ -70,6 +72,13 @@ class LangChainOrchestratorAdapter(BaseAIOrchestrator):
             
             latency_ms = (time.time() - start_time) * 1000
             
+            # Calculate cost (rough estimate for GPT-4)
+            # GPT-4: $0.03 per 1K input tokens, $0.06 per 1K output tokens
+            # Approximation: 4 chars = 1 token
+            input_tokens = len(request.prompt) // 4
+            output_tokens = len(str(result)) // 4
+            cost = (input_tokens / 1000 * 0.03) + (output_tokens / 1000 * 0.06)
+            
             return AIResponse(
                 result=result,
                 provider=self.provider,
@@ -77,6 +86,8 @@ class LangChainOrchestratorAdapter(BaseAIOrchestrator):
                 task_type=request.task_type,
                 latency_ms=latency_ms,
                 request_id=request_id,
+                tokens_used=input_tokens + output_tokens,
+                cost=cost,
             )
         
         except Exception as e:
@@ -142,13 +153,46 @@ class LangChainOrchestratorAdapter(BaseAIOrchestrator):
         }
     
     async def _execute_chat(self, request: AIRequest) -> str:
-        """Execute chat using LangChain."""
+        """
+        Execute chat using LangChain with memory support.
+        
+        Uses conversation_history from request if available.
+        """
         chat_model = self._langchain.get_chat_model(
             model_name=request.model,
             temperature=request.temperature or 0.7,
         )
         
-        response = chat_model.invoke(request.prompt)
+        # Build messages with history
+        messages = []
+        
+        # Add conversation history
+        for msg in request.conversation_history:
+            role = msg.get("role", "user")
+            content = msg.get("content", "")
+            
+            if role == "system":
+                from langchain_core.messages import SystemMessage
+                messages.append(SystemMessage(content=content))
+            elif role == "assistant":
+                from langchain_core.messages import AIMessage
+                messages.append(AIMessage(content=content))
+            else:
+                from langchain_core.messages import HumanMessage
+                messages.append(HumanMessage(content=content))
+        
+        # Add current message
+        from langchain_core.messages import HumanMessage
+        messages.append(HumanMessage(content=request.prompt))
+        
+        # Add user context as system message if available
+        if request.user_context:
+            from langchain_core.messages import SystemMessage
+            context_summary = request.user_context.get("summary", "")
+            if context_summary:
+                messages.insert(0, SystemMessage(content=f"User context: {context_summary}"))
+        
+        response = chat_model.invoke(messages)
         return response.content
     
     async def health_check(self) -> bool:
