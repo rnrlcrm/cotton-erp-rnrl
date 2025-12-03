@@ -115,6 +115,15 @@ class BaseAIOrchestrator(ABC):
         enable_guardrails: bool = True,
         enable_memory: bool = True,
         **config
+    ):
+        """Initialize orchestrator with provider and features."""
+        self.provider = provider
+        self.enable_guardrails = enable_guardrails
+        self.enable_memory = enable_memory
+        self.config = config
+        self._guardrails = None
+        self._memory_loader = None
+    
     async def execute(self, request: AIRequest) -> AIResponse:
         """
         Execute AI request with guardrails and memory.
@@ -181,7 +190,35 @@ class BaseAIOrchestrator(ABC):
                 logger.warning(f"Failed to load memory: {e}")
         
         # Step 3: Execute provider-specific request
-        start_time = datetime.utcnow()
+        response = await self._execute_impl(request)
+        
+        # Step 4: Record usage
+        if self.enable_guardrails and request.user_id:
+            guardrails = await self._get_guardrails()
+            await guardrails.record_usage(
+                user_id=request.user_id,
+                tokens_used=response.tokens_used,
+                cost=response.cost
+            )
+        
+        # Step 5: Return response
+        return response
+    
+    @abstractmethod
+    async def _execute_impl(self, request: AIRequest) -> AIResponse:
+        """
+        Provider-specific execution logic.
+        
+        Subclasses implement this instead of execute().
+        
+        Args:
+            request: Standardized AI request (with memory loaded)
+            
+        Returns:
+            Standardized AI response
+        """
+        pass
+    
     def get_provider_info(self) -> Dict[str, Any]:
         """Get provider metadata for observability."""
         return {
@@ -218,96 +255,6 @@ class BaseAIOrchestrator(ABC):
 
 class AIOrchestrationError(Exception):
     """Base exception for AI orchestration errors."""
-    pass    
-            await guardrails.record_usage(
-                user_id=request.user_id,
-                tokens_used=response.tokens_used,
-                cost=response.cost
-            )
-        
-        return response
-    
-    @abstractmethod
-    async def _execute_impl(self, request: AIRequest) -> AIResponse:
-        """
-        Provider-specific execution logic.
-        
-        Subclasses implement this instead of execute().
-        
-        Args:
-            request: Standardized AI request (with memory loaded)
-            
-        Returns:
-            Standardized AI response
-        """
-        pass
-        # Lazy load dependencies
-        self._guardrails = None
-        self._memory_loader = None
-    
-    @abstractmethod
-    async def execute(self, request: AIRequest) -> AIResponse:
-        """
-        Execute AI request and return response.
-        
-        This is the ONLY method business logic should call.
-        All AI interactions go through this single interface.
-        
-        Args:
-            request: Standardized AI request
-            
-        Returns:
-            Standardized AI response with explainability
-        """
-        pass
-    
-    @abstractmethod
-    async def health_check(self) -> bool:
-        """
-        Check if AI provider is healthy.
-        
-        Returns:
-            True if provider is available and working
-        """
-        pass
-    
-    async def execute_with_fallback(
-        self,
-        request: AIRequest,
-        fallback_orchestrator: Optional['BaseAIOrchestrator'] = None
-    ) -> AIResponse:
-        """
-        Execute with optional fallback to another provider.
-        
-        This enables provider redundancy for 15-year resilience.
-        """
-        try:
-            return await self.execute(request)
-        except Exception as e:
-            if fallback_orchestrator:
-                # Log primary failure
-                import logging
-                logging.warning(
-                    f"AI provider {self.provider} failed, using fallback: {e}"
-                )
-                return await fallback_orchestrator.execute(request)
-            raise
-    
-    def get_provider_info(self) -> Dict[str, Any]:
-        """Get provider metadata for observability."""
-        return {
-            "provider": self.provider.value,
-            "config": {k: v for k, v in self.config.items() if k not in ['api_key', 'secret']}
-        }
-
-
-class AIOrchestrationError(Exception):
-    """Base exception for AI orchestration errors."""
-    pass
-
-
-class AIProviderUnavailableError(AIOrchestrationError):
-    """Raised when AI provider is unavailable."""
     pass
 
 
@@ -319,3 +266,4 @@ class AIProviderUnavailableError(AIOrchestrationError):
 class AIRequestValidationError(AIOrchestrationError):
     """AI request is invalid."""
     pass
+
