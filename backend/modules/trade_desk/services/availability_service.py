@@ -49,8 +49,7 @@ from backend.modules.trade_desk.repositories import AvailabilityRepository
 from backend.modules.settings.commodities.unit_converter import UnitConverter
 from backend.modules.settings.commodities.models import Commodity, CommodityParameter
 from backend.modules.settings.locations.models import Location
-from backend.modules.partners.validators.insider_trading import InsiderTradingValidator
-from backend.modules.partners.cdps.capability_detection import CapabilityDetectionService
+from backend.core.validators.insider_trading import InsiderTradingValidator
 
 
 class AvailabilityService:

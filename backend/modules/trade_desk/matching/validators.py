@@ -217,7 +217,7 @@ class MatchValidator:
         # STEP 1.7: 🚀 INSIDER TRADING PREVENTION (CDPS)
         # Block trading between related entities
         # ====================================================================
-        from backend.modules.partners.validators.insider_trading import InsiderTradingValidator
+        from backend.core.validators.insider_trading import InsiderTradingValidator
         
         insider_validator = InsiderTradingValidator(self.db)
         

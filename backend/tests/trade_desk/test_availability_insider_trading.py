@@ -23,7 +23,7 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.modules.trade_desk.services.availability_service import AvailabilityService
-from backend.modules.partners.validators.insider_trading import InsiderTradingValidator, InsiderTradingError
+from backend.core.validators.insider_trading import InsiderTradingValidator, InsiderTradingError
 from backend.modules.partners.models import BusinessPartner
 from backend.modules.settings.locations.models import Location
 from backend.modules.settings.commodities.models import Commodity

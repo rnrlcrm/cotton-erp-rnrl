@@ -32,7 +32,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
 from backend.modules.partners.models import BusinessPartner
-from backend.modules.partners.repositories import BusinessPartnerRepository
 
 
 class CapabilityValidationError(Exception):
@@ -57,7 +56,6 @@ class TradeCapabilityValidator:
     
     def __init__(self, db: AsyncSession):
         self.db = db
-        self.repo = BusinessPartnerRepository(db)
     
     async def validate_sell_capability(
         self,
@@ -85,7 +83,11 @@ class TradeCapabilityValidator:
         Raises:
             CapabilityValidationError: If raise_exception=True and validation fails
         """
-        partner = await self.repo.get_by_id(partner_id)
+        # Query partner directly (read-only, acceptable cross-module dependency)
+        result = await self.db.execute(
+            select(BusinessPartner).where(BusinessPartner.id == partner_id)
+        )
+        partner = result.scalar_one_or_none()
         
         if not partner:
             error_msg = f"❌ Partner {partner_id} not found"
@@ -208,7 +210,11 @@ class TradeCapabilityValidator:
         Raises:
             CapabilityValidationError: If raise_exception=True and validation fails
         """
-        partner = await self.repo.get_by_id(partner_id)
+        # Query partner directly (read-only, acceptable cross-module dependency)
+        result = await self.db.execute(
+            select(BusinessPartner).where(BusinessPartner.id == partner_id)
+        )
+        partner = result.scalar_one_or_none()
         
         if not partner:
             error_msg = f"❌ Partner {partner_id} not found"
