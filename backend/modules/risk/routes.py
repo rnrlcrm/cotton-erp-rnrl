@@ -450,6 +450,104 @@ async def train_ml_models(
         )
 
 
+@router.post(
+    "/ml/train/all",
+    summary="Train All ML Models",
+    description="Train all 4 ML models (RandomForest, XGBoost, Credit Limit, Fraud Detector)",
+)
+async def train_all_ml_models(
+    num_samples: int = 10000,
+    current_user=Depends(get_current_user),
+    ml_model: MLRiskModel = Depends(get_ml_model),
+    _check: None = Depends(RequireCapability(Capabilities.ADMIN_MANAGE_USERS))
+):
+    """Train all ML models at once (Payment Default, XGBoost, Credit Limit, Fraud Detector)."""
+    try:
+        import time
+        start_time = time.time()
+        
+        # Generate data once
+        df = ml_model.generate_synthetic_training_data(num_samples=num_samples)
+        
+        # Train all models
+        metrics = {
+            "payment_default": ml_model.train_payment_default_model(df=df),
+            "xgboost": ml_model.train_xgboost_risk_model(df=df),
+            "credit_limit": ml_model.train_credit_limit_model(df=df),
+            "fraud_detector": ml_model.train_fraud_detector(df=df)
+        }
+        
+        training_time = time.time() - start_time
+        
+        return {
+            "success": True,
+            "models_trained": 4,
+            "metrics": metrics,
+            "samples": num_samples,
+            "training_time_seconds": round(training_time, 2)
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Training failed: {str(e)}")
+
+
+@router.post(
+    "/ml/predict/fraud",
+    summary="Detect Fraud Anomalies",
+    description="Use IsolationForest to detect unusual partner behavior"
+)
+async def detect_fraud(
+    credit_utilization: float,
+    rating: float,
+    payment_performance: int,
+    trade_history_count: int,
+    dispute_rate: float,
+    payment_delay_days: float,
+    avg_trade_value: float,
+    current_user=Depends(get_current_user),
+    ml_model: MLRiskModel = Depends(get_ml_model)
+):
+    """Detect fraud anomalies using ML."""
+    try:
+        detection = await ml_model.detect_fraud_anomaly(
+            credit_utilization=credit_utilization,
+            rating=rating,
+            payment_performance=payment_performance,
+            trade_history_count=trade_history_count,
+            dispute_rate=dispute_rate,
+            payment_delay_days=payment_delay_days,
+            avg_trade_value=avg_trade_value
+        )
+        return {"success": True, "detection": detection}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Fraud detection failed: {str(e)}")
+
+
+@router.get(
+    "/ml/models/status",
+    summary="Get ML Models Status",
+    description="Check which ML models are trained and ready"
+)
+async def get_ml_models_status(
+    ml_model: MLRiskModel = Depends(get_ml_model)
+):
+    """Get status of all ML models."""
+    return {
+        "models": {
+            "payment_default": {"trained": ml_model.payment_default_model is not None},
+            "xgboost": {"trained": ml_model.xgboost_model is not None},
+            "credit_limit": {"trained": ml_model.credit_limit_model is not None},
+            "fraud_detector": {"trained": ml_model.fraud_detector is not None}
+        },
+        "total_models": 4,
+        "trained_models": sum([
+            ml_model.payment_default_model is not None,
+            ml_model.xgboost_model is not None,
+            ml_model.credit_limit_model is not None,
+            ml_model.fraud_detector is not None
+        ])
+    }
+
+
 # =============================================================================
 # EXPOSURE MONITORING ENDPOINTS
 # =============================================================================
