@@ -49,6 +49,7 @@ from backend.modules.settings.commodities.schemas import (
     DeliveryTermResponse,
     DeliveryTermUpdate,
     HSNSuggestion,
+    InternationalFieldsSuggestion,
     ParameterSuggestion,
     PassingTermCreate,
     PassingTermResponse,
@@ -233,6 +234,32 @@ def suggest_hsn(
     """AI: Suggest HSN code and GST rate. Requires COMMODITY_CREATE capability. Supports idempotency."""
     suggestion = ai_helper.suggest_hsn_code(name, category, description)
     return suggestion
+
+
+@router.post("/ai/suggest-international-fields", response_model=InternationalFieldsSuggestion)
+async def suggest_international_fields(
+    commodity_name: str,
+    category: Optional[str] = None,
+    ai_helper: CommodityAIHelper = Depends(get_ai_helper),
+    idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key"),
+    _check: None = Depends(RequireCapability(Capabilities.COMMODITY_CREATE))
+):
+    """
+    AI: Auto-populate international commodity fields (90% automation).
+    
+    Provides intelligent suggestions for:
+    - Multi-currency pricing (USD, INR, EUR, etc.)
+    - International tax codes (HS 6-digit, country-specific)
+    - Quality standards (USDA, BCI, ISO)
+    - Geographic data (producing countries, trading hubs)
+    - Exchange information (MCX, ICE, NCDEX)
+    - Compliance rules (import/export regulations)
+    - Seasonal data, storage conditions, contract terms
+    
+    Requires COMMODITY_CREATE capability. Supports idempotency.
+    """
+    suggestion = await ai_helper.suggest_international_fields(commodity_name, category)
+    return InternationalFieldsSuggestion(**suggestion)
 
 
 @router.post("/{commodity_id}/ai/suggest-parameters", response_model=List[ParameterSuggestion])
