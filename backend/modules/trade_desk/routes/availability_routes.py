@@ -62,7 +62,7 @@ async def create_availability(
     db: AsyncSession = Depends(get_db),
     idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key"),
     redis_client: redis.Redis = Depends(get_redis),
-    _check: None = Depends(RequireCapability(Capabilities.TRADE_SELL))
+    _check: None = Depends(RequireCapability(Capabilities.AVAILABILITY_CREATE))
 ):
     """
     Create new availability posting.
@@ -138,7 +138,7 @@ async def search_availabilities(
     current_user=Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
     redis_client: redis.Redis = Depends(get_redis),
-    _check: None = Depends(RequireCapability(Capabilities.TRADE_BUY))
+    _check: None = Depends(RequireCapability(Capabilities.AVAILABILITY_READ))
 ):
     """
     ⚠️ DEPRECATED ENDPOINT
@@ -183,7 +183,7 @@ async def get_my_availabilities(
     current_user=Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
     redis_client: redis.Redis = Depends(get_redis),
-    _check: None = Depends(RequireCapability(Capabilities.TRADE_SELL))
+    _check: None = Depends(RequireCapability(Capabilities.AVAILABILITY_READ))
 ):
     """Get seller's inventory list."""
     if not current_user.business_partner_id:

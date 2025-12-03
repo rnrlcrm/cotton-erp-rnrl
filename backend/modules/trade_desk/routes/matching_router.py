@@ -22,19 +22,23 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, status, Query, Header
 from sqlalchemy.ext.asyncio import AsyncSession
 from pydantic import BaseModel, Field
+import redis.asyncio as redis
 
-from backend.core.database import get_db
-from backend.core.auth import get_current_user
-from backend.core.capabilities import Capabilities, RequireCapability
+from backend.db.async_session import get_db
+from backend.app.dependencies import get_redis
+from backend.core.auth.dependencies import get_current_user
+from backend.core.auth.capabilities.definitions import Capabilities
+from backend.core.auth.capabilities.decorators import RequireCapability
 from backend.modules.trade_desk.models.requirement import Requirement
 from backend.modules.trade_desk.models.availability import Availability
 from backend.modules.trade_desk.matching.matching_engine import MatchingEngine, MatchResult
 from backend.modules.trade_desk.matching.validators import MatchValidator
 from backend.modules.trade_desk.matching.scoring import MatchScorer
 from backend.modules.trade_desk.config.matching_config import MatchingConfig
-from backend.modules.trade_desk.services.risk_engine import RiskEngine
+from backend.modules.risk.risk_engine import RiskEngine
 from backend.modules.trade_desk.repositories.requirement_repository import RequirementRepository
 from backend.modules.trade_desk.repositories.availability_repository import AvailabilityRepository
+from backend.modules.trade_desk.services.matching_service import MatchingService
 
 
 router = APIRouter(prefix="/api/v1/matching", tags=["matching"])

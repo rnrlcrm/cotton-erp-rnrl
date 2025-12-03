@@ -77,7 +77,7 @@ async def create_requirement(
     current_user=Depends(get_current_user),
     service: RequirementService = Depends(get_requirement_service),
     idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key"),
-    _check: None = Depends(RequireCapability(Capabilities.TRADE_BUY))
+    _check: None = Depends(RequireCapability(Capabilities.REQUIREMENT_CREATE))
 ):
     """
     Create new requirement posting with full AI enhancements.
@@ -465,7 +465,7 @@ async def search_requirements(
     request: RequirementSearchRequest,
     current_user=Depends(get_current_user),
     service: RequirementService = Depends(get_requirement_service),
-    _check: None = Depends(RequireCapability(Capabilities.TRADE_SELL))
+    _check: None = Depends(RequireCapability(Capabilities.REQUIREMENT_READ))
 ):
     """
     ⚠️ DEPRECATED ENDPOINT
@@ -555,7 +555,7 @@ async def get_my_requirements(
     limit: int = Query(100, ge=1, le=1000),
     current_user=Depends(get_current_user),
     service: RequirementService = Depends(get_requirement_service),
-    _check: None = Depends(RequireCapability(Capabilities.TRADE_BUY))
+    _check: None = Depends(RequireCapability(Capabilities.REQUIREMENT_READ))
 ):
     """Get all requirements for current buyer."""
     if not current_user.business_partner_id:
