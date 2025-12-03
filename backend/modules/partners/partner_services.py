@@ -275,94 +275,117 @@ class DocumentProcessingService:
     OCR extraction and document verification.
     
     Auto-extracts data from uploaded documents to minimize user typing.
+    Uses Tesseract OCR for production-grade text extraction.
     """
     
     def __init__(self, db: AsyncSession, redis_client: Optional[redis.Redis] = None):
         self.db = db
         self.redis = redis_client
         self.outbox_repo = OutboxRepository(db)
+        
+        # Initialize OCR service
+        from backend.core.ocr import get_ocr_service
+        self.ocr_service = get_ocr_service()
     
-    async def extract_gst_certificate(self, file_url: str) -> Dict:
+    async def extract_gst_certificate(self, file_bytes: bytes) -> Dict:
         """
         Extract GSTIN and business name from GST certificate using OCR.
         
         Args:
-            file_url: URL to uploaded GST certificate
+            file_bytes: Raw image bytes of GST certificate
         
         Returns:
             Dict with extracted data
         """
-        # TODO: Call OCR service (Tesseract, AWS Textract, Google Vision)
-        # For now, mock
-        
-        return {
-            "gstin": "27AAAPB1234C1Z5",
-            "legal_name": "Sample Business Pvt Ltd",
-            "trade_name": "Sample Traders",
-            "registration_date": "15/01/2020",
-            "principal_address": "123 Business Park, Mumbai",
-            "confidence": 0.92
-        }
+        try:
+            # Use actual Tesseract OCR
+            extracted_data = self.ocr_service.extract_gst_certificate(file_bytes)
+            
+            logger.info(
+                f"GST OCR extraction: GSTIN={extracted_data.get('gstin', 'N/A')}, "
+                f"confidence={extracted_data.get('confidence', 0)}"
+            )
+            
+            return extracted_data
+            
+        except Exception as e:
+            logger.error(f"GST certificate OCR failed: {e}")
+            return {"confidence": 0.0, "error": str(e)}
     
-    async def extract_pan_card(self, file_url: str) -> Dict:
+    async def extract_pan_card(self, file_bytes: bytes) -> Dict:
         """
         Extract PAN from PAN card using OCR.
         
         Args:
-            file_url: URL to uploaded PAN card
+            file_bytes: Raw image bytes of PAN card
         
         Returns:
             Dict with extracted data
         """
-        # TODO: Call OCR service
-        
-        return {
-            "pan": "AAAPB1234C",
-            "name": "SAMPLE BUSINESS PVT LTD",
-            "confidence": 0.95
-        }
+        try:
+            # Use actual Tesseract OCR
+            extracted_data = self.ocr_service.extract_pan_card(file_bytes)
+            
+            logger.info(
+                f"PAN OCR extraction: PAN={extracted_data.get('pan', 'N/A')}, "
+                f"confidence={extracted_data.get('confidence', 0)}"
+            )
+            
+            return extracted_data
+            
+        except Exception as e:
+            logger.error(f"PAN card OCR failed: {e}")
+            return {"confidence": 0.0, "error": str(e)}
     
-    async def extract_bank_proof(self, file_url: str) -> Dict:
+    async def extract_bank_proof(self, file_bytes: bytes) -> Dict:
         """
         Extract account details from cancelled cheque/bank statement.
         
         Args:
-            file_url: URL to uploaded bank proof
+            file_bytes: Raw image bytes of bank proof
         
         Returns:
             Dict with extracted data
         """
-        # TODO: Call OCR service
-        
-        return {
-            "account_number": "1234567890",
-            "ifsc_code": "HDFC0001234",
-            "account_holder_name": "Sample Business Pvt Ltd",
-            "bank_name": "HDFC Bank",
-            "branch": "Mumbai Branch",
-            "confidence": 0.88
-        }
+        try:
+            # Use actual Tesseract OCR
+            extracted_data = self.ocr_service.extract_bank_proof(file_bytes)
+            
+            logger.info(
+                f"Bank proof OCR extraction: IFSC={extracted_data.get('ifsc', 'N/A')}, "
+                f"confidence={extracted_data.get('confidence', 0)}"
+            )
+            
+            return extracted_data
+            
+        except Exception as e:
+            logger.error(f"Bank proof OCR failed: {e}")
+            return {"confidence": 0.0, "error": str(e)}
     
-    async def extract_vehicle_rc(self, file_url: str) -> Dict:
+    async def extract_vehicle_rc(self, file_bytes: bytes) -> Dict:
         """
         Extract vehicle details from RC book.
         
         Args:
-            file_url: URL to uploaded RC book
+            file_bytes: Raw image bytes of vehicle RC
         
         Returns:
             Dict with extracted data
         """
-        # TODO: Call OCR service
-        
-        return {
-            "registration_number": "MH01AB1234",
-            "owner_name": "Sample Transport Pvt Ltd",
-            "vehicle_class": "Light Goods Vehicle",
-            "manufacturer": "Tata Motors",
-            "model": "407 Pickup",
-            "confidence": 0.90
-        }
+        try:
+            # Use actual Tesseract OCR
+            extracted_data = self.ocr_service.extract_vehicle_rc(file_bytes)
+            
+            logger.info(
+                f"Vehicle RC OCR extraction: Reg={extracted_data.get('registration_number', 'N/A')}, "
+                f"confidence={extracted_data.get('confidence', 0)}"
+            )
+            
+            return extracted_data
+            
+        except Exception as e:
+            logger.error(f"Vehicle RC OCR failed: {e}")
+            return {"confidence": 0.0, "error": str(e)}
 
 
 class RiskScoringService:

@@ -143,9 +143,10 @@ class PartnerDocumentService:
         Process document upload with OCR extraction.
         
         Steps:
-        1. Upload file to storage (S3/GCS)
-        2. Extract data using OCR based on document type
-        3. Create document record with extracted data
+        1. Read file bytes for OCR
+        2. Extract data using Tesseract OCR based on document type
+        3. Upload file to storage (S3/GCS) - TODO
+        4. Create document record with extracted data
         
         Args:
             application_id: Application ID
@@ -157,19 +158,26 @@ class PartnerDocumentService:
         Returns:
             Created PartnerDocument
         """
-        # TODO: Upload file to storage (S3/GCS)
-        file_url = f"https://storage.example.com/{file.filename}"
+        # Read file bytes for OCR processing
+        file_bytes = await file.read()
         
-        # Extract data using OCR based on document type
+        # Reset file pointer for potential re-upload
+        await file.seek(0)
+        
+        # Extract data using Tesseract OCR based on document type
         extracted_data = {}
         if document_type == "GST_CERTIFICATE":
-            extracted_data = await self.doc_processing_service.extract_gst_certificate(file_url)
+            extracted_data = await self.doc_processing_service.extract_gst_certificate(file_bytes)
         elif document_type == "PAN_CARD":
-            extracted_data = await self.doc_processing_service.extract_pan_card(file_url)
+            extracted_data = await self.doc_processing_service.extract_pan_card(file_bytes)
         elif document_type == "BANK_PROOF":
-            extracted_data = await self.doc_processing_service.extract_bank_proof(file_url)
+            extracted_data = await self.doc_processing_service.extract_bank_proof(file_bytes)
         elif document_type == "VEHICLE_RC":
-            extracted_data = await self.doc_processing_service.extract_vehicle_rc(file_url)
+            extracted_data = await self.doc_processing_service.extract_vehicle_rc(file_bytes)
+        
+        # TODO: Upload file to storage (S3/GCS)
+        # For now, use placeholder URL
+        file_url = f"https://storage.example.com/{file.filename}"
         
         # Get application to find partner_id
         application = await self.app_repo.get_by_id(application_id, organization_id)
@@ -183,7 +191,7 @@ class PartnerDocumentService:
             document_type=document_type,
             file_url=file_url,
             file_name=file.filename,
-            file_size=file.size,
+            file_size=file.size or len(file_bytes),
             mime_type=file.content_type,
             ocr_extracted_data=extracted_data,
             ocr_confidence=extracted_data.get("confidence", 0),
