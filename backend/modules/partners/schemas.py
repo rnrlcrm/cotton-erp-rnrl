@@ -39,7 +39,7 @@ class DocumentUpload(BaseModel):
 
 
 class PartnerFilters(BaseModel):
-    \"\"\"Advanced filters for partner listing\"\"\"
+    """Advanced filters for partner listing"""
     entity_class: Optional[str] = None
     status: Optional[PartnerStatus] = None
     kyc_status: Optional[KYCStatus] = None
