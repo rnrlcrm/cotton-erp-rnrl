@@ -40,7 +40,7 @@ from backend.modules.partners.models import (
     PartnerOnboardingApplication,
     PartnerVehicle,
 )
-from backend.modules.partners.enums import PartnerStatus, KYCStatus, PartnerType
+from backend.modules.partners.enums import PartnerStatus, KYCStatus
 
 
 class BusinessPartnerRepository:
@@ -184,7 +184,7 @@ class BusinessPartnerRepository:
         organization_id: UUID,
         skip: int = 0,
         limit: int = 100,
-        partner_type: Optional[PartnerType] = None,
+        entity_class: Optional[str] = None,
         status: Optional[PartnerStatus] = None,
         kyc_status: Optional[KYCStatus] = None,
         search: Optional[str] = None
@@ -196,7 +196,7 @@ class BusinessPartnerRepository:
             organization_id: Organization ID for isolation
             skip: Pagination offset
             limit: Pagination limit
-            partner_type: Filter by partner type
+            entity_class: Filter by entity class
             status: Filter by status
             kyc_status: Filter by KYC status
             search: Search in name/tax_id
@@ -209,8 +209,8 @@ class BusinessPartnerRepository:
         )
         
         # Apply filters
-        if partner_type:
-            query = query.where(BusinessPartner.partner_type == partner_type)
+        if entity_class:
+            query = query.where(BusinessPartner.entity_class == entity_class)
         
         if status:
             query = query.where(BusinessPartner.status == status)
@@ -296,7 +296,7 @@ class BusinessPartnerRepository:
         organization_id: Optional[UUID] = None,
         skip: int = 0,
         limit: int = 100,
-        partner_type: Optional[PartnerType] = None,
+        entity_class: Optional[str] = None,
         status: Optional[PartnerStatus] = None,
         kyc_status: Optional[KYCStatus] = None
     ) -> List[BusinessPartner]:
@@ -310,7 +310,7 @@ class BusinessPartnerRepository:
             organization_id=org_id,
             skip=skip,
             limit=limit,
-            partner_type=partner_type,
+            entity_class=entity_class,
             status=status,
             kyc_status=kyc_status
         )

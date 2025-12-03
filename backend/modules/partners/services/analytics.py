@@ -17,7 +17,7 @@ import redis.asyncio as redis
 
 from backend.core.outbox import OutboxRepository
 from backend.modules.partners.models import BusinessPartner
-from backend.modules.partners.enums import PartnerStatus, PartnerType, KYCStatus, RiskCategory
+from backend.modules.partners.enums import PartnerStatus, KYCStatus, RiskCategory
 from backend.modules.partners.schemas import DashboardStats
 
 
@@ -159,7 +159,7 @@ class PartnerAnalyticsService:
     async def get_export_data(
         self,
         organization_id: UUID,
-        partner_type: Optional[PartnerType] = None,
+        entity_class: Optional[str] = None,
         status: Optional[PartnerStatus] = None,
         kyc_status: Optional[KYCStatus] = None,
         state: Optional[str] = None,
@@ -177,8 +177,8 @@ class PartnerAnalyticsService:
             BusinessPartner.is_deleted == False
         )
         
-        if partner_type:
-            query = query.where(BusinessPartner.partner_type == partner_type)
+        if entity_class:
+            query = query.where(BusinessPartner.entity_class == entity_class)
         if status:
             query = query.where(BusinessPartner.status == status)
         if kyc_status:

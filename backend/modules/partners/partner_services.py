@@ -34,7 +34,6 @@ from backend.modules.partners.enums import (
     DocumentType,
     KYCStatus,
     PartnerStatus,
-    PartnerType,
     RiskCategory,
 )
 from backend.modules.partners.models import (
@@ -405,7 +404,7 @@ class RiskScoringService:
     
     async def calculate_risk_score(
         self,
-        partner_type: PartnerType,
+        entity_class: str,
         entity_type: BusinessEntityType,
         business_age_months: int,
         gst_turnover: Optional[Decimal] = None,
@@ -418,7 +417,7 @@ class RiskScoringService:
         Calculate comprehensive risk score.
         
         Args:
-            partner_type: Type of partner
+            entity_class: Entity class (business_entity or service_provider)
             entity_type: Business entity type
             business_age_months: Age in months
             gst_turnover: Annual GST turnover
@@ -554,8 +553,8 @@ class RiskScoringService:
                 "points": -25
             })
         
-        # === Quality Infrastructure (for sellers) ===
-        if partner_type == PartnerType.SELLER and has_quality_lab:
+        # === Quality Infrastructure (for business entities) ===
+        if entity_class == "business_entity" and has_quality_lab:
             score += 10
             factors.append({
                 "factor": "Quality Infrastructure",
@@ -564,8 +563,8 @@ class RiskScoringService:
                 "points": 10
             })
         
-        # === Logistics Capability (for sellers) ===
-        if partner_type == PartnerType.SELLER and can_arrange_transport:
+        # === Logistics Capability (for business entities) ===
+        if entity_class == "business_entity" and can_arrange_transport:
             score += 5
             factors.append({
                 "factor": "Logistics",
@@ -1424,8 +1423,8 @@ class PartnerService:
         if not partner:
             raise ValueError("Partner not found")
         
-        if partner.partner_type != PartnerType.SERVICE_PROVIDER:
-            raise ValueError("Only transporter partners can add vehicles")
+        if partner.entity_class != "service_provider":
+            raise ValueError("Only service provider partners can add vehicles")
         
         # Verify with RTO if registration number provided
         rto_data = None

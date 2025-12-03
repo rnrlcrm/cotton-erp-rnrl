@@ -32,7 +32,7 @@ from backend.core.auth.capabilities import Capabilities, RequireCapability
 from backend.core.events.emitter import EventEmitter
 from backend.db.session import get_db
 from backend.app.dependencies import get_redis
-from backend.modules.partners.enums import PartnerStatus, PartnerType, KYCStatus, RiskCategory
+from backend.modules.partners.enums import PartnerStatus, KYCStatus, RiskCategory
 from backend.modules.partners.schemas import (
     AmendmentRequest,
     ApprovalDecision,
@@ -420,7 +420,7 @@ async def reject_partner(
 async def list_partners(
     skip: int = 0,
     limit: int = 100,
-    partner_type: Optional[PartnerType] = None,
+    entity_class: Optional[str] = None,
     status: Optional[PartnerStatus] = None,
     kyc_status: Optional[KYCStatus] = None,
     kyc_expiring_days: Optional[int] = None,
@@ -835,7 +835,7 @@ async def add_vehicle(
 )
 async def export_partners(
     format: str = "excel",  # excel or csv
-    partner_type: Optional[PartnerType] = None,
+    entity_class: Optional[str] = None,
     status: Optional[PartnerStatus] = None,
     kyc_status: Optional[KYCStatus] = None,
     state: Optional[str] = None,
