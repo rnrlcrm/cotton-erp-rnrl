@@ -366,6 +366,10 @@ class MatchScorer:
         max_budget = Decimal(str(buyer_max_budget))
         seller_price_dec = Decimal(str(seller_price))
         
+        # NOTE: Currency conversion is for DISPLAY only, not for scoring
+        # Buyer and seller negotiate in their respective currencies
+        # Price comparison assumes same currency or buyer understands conversion
+        
         # Use target price if specified, otherwise assume 90% of max
         if buyer_target_price:
             target_price = Decimal(str(buyer_target_price))
@@ -441,6 +445,8 @@ class MatchScorer:
         1. Location match (already filtered, so score 1.0 if here)
         2. Delivery timeline compatibility
         3. Delivery terms matching
+        4. Incoterm matching (international trade)
+        5. Port distance (international trade)
         
         Returns:
         {
@@ -458,8 +464,31 @@ class MatchScorer:
         # Delivery terms check (placeholder)
         terms_score = 1.0
         
-        # Average
-        final_score = (location_score + timeline_score + terms_score) / 3.0
+        # Incoterm matching (international trade)
+        incoterm_score = self._calculate_incoterm_match(requirement, availability)
+        
+        # Port distance (international trade)
+        port_distance_score = self._calculate_port_distance_score(requirement, availability)
+        
+        # Weighted average
+        # National trade: location (40%), timeline (30%), terms (30%)
+        # International: location (25%), timeline (20%), terms (20%), incoterm (20%), port distance (15%)
+        is_international = requirement.destination_country is not None
+        
+        if is_international:
+            final_score = (
+                location_score * 0.25 +
+                timeline_score * 0.20 +
+                terms_score * 0.20 +
+                incoterm_score * 0.20 +
+                port_distance_score * 0.15
+            )
+        else:
+            final_score = (
+                location_score * 0.40 +
+                timeline_score * 0.30 +
+                terms_score * 0.30
+            )
         
         return {
             "score": final_score,
@@ -467,9 +496,80 @@ class MatchScorer:
             "details": {
                 "location_compatible": True,
                 "timeline_compatible": True,
-                "terms_compatible": True
+                "terms_compatible": True,
+                "incoterm_score": incoterm_score if is_international else None,
+                "port_distance_score": port_distance_score if is_international else None,
+                "is_international": is_international
             }
         }
+    
+    def _calculate_incoterm_match(
+        self,
+        requirement: Requirement,
+        availability: Availability
+    ) -> float:
+        """
+        Calculate incoterm compatibility score for international trade.
+        
+        Rules:
+        - If requirement has NO preferred_incoterm: 1.0 (accept any)
+        - If availability has NO supported_incoterms: 0.5 (partial score)
+        - If preferred matches supported: 1.0 (perfect match)
+        - If not matched: 0.3 (incompatible)
+        
+        Returns:
+            Score between 0.0 and 1.0
+        """
+        req_incoterm = requirement.preferred_incoterm
+        avail_incoterms = availability.supported_incoterms
+        
+        # No preference - accept any
+        if not req_incoterm:
+            return 1.0
+        
+        # Seller has no incoterms specified - partial score
+        if not avail_incoterms or not isinstance(avail_incoterms, list):
+            return 0.5
+        
+        # Check if preferred is supported
+        if req_incoterm.upper() in [inc.upper() for inc in avail_incoterms]:
+            return 1.0
+        
+        # No match - incompatible
+        return 0.3
+    
+    def _calculate_port_distance_score(
+        self,
+        requirement: Requirement,
+        availability: Availability
+    ) -> float:
+        """
+        Calculate port distance score for international trade.
+        
+        Uses simplified port distance estimation:
+        - Same port: 1.0
+        - Different ports: 0.7 (placeholder - would calculate actual distance)
+        - Missing port info: 0.8 (neutral)
+        
+        TODO: Implement actual port-to-port distance calculation
+        
+        Returns:
+            Score between 0.0 and 1.0
+        """
+        req_port = requirement.import_port
+        avail_port = availability.export_port
+        
+        # No port info - neutral score
+        if not req_port or not avail_port:
+            return 0.8
+        
+        # Same port (likely transshipment scenario)
+        if req_port.upper() == avail_port.upper():
+            return 1.0
+        
+        # Different ports - would calculate distance
+        # For now, return moderate score
+        return 0.7
     
     # ========================================================================
     # QUANTITY SCORING (embedded in quality/delivery)
@@ -701,3 +801,4 @@ class MatchScorer:
         
         distance = R * c
         return distance
+
