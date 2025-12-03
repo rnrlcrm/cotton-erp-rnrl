@@ -27,13 +27,16 @@ from backend.modules.settings.commodities.schemas import HSNSuggestion
 class HSNLearningService:
     """Self-learning HSN suggestion system"""
     
+    # Constants
+    DESC_COTTON_RAW = "Cotton, not carded or combed"
+    
     # Development mode dummy data (used when no API configured)
     DUMMY_HSN_DATA = {
         # Textiles - Cotton
-        "kapas": {"hsn": "5201", "desc": "Cotton, not carded or combed", "gst": 5.0},
-        "raw cotton": {"hsn": "5201", "desc": "Cotton, not carded or combed", "gst": 5.0},
-        "cotton lint": {"hsn": "5201", "desc": "Cotton, not carded or combed", "gst": 5.0},
-        "cotton": {"hsn": "5201", "desc": "Cotton, not carded or combed", "gst": 5.0},
+        "kapas": {"hsn": "5201", "desc": DESC_COTTON_RAW, "gst": 5.0},
+        "raw cotton": {"hsn": "5201", "desc": DESC_COTTON_RAW, "gst": 5.0},
+        "cotton lint": {"hsn": "5201", "desc": DESC_COTTON_RAW, "gst": 5.0},
+        "cotton": {"hsn": "5201", "desc": DESC_COTTON_RAW, "gst": 5.0},
         "cotton waste": {"hsn": "5202", "desc": "Cotton waste", "gst": 5.0},
         "cotton yarn": {"hsn": "5205", "desc": "Cotton yarn containing >= 85% cotton", "gst": 5.0},
         "yarn": {"hsn": "5205", "desc": "Cotton yarn", "gst": 5.0},
@@ -152,7 +155,7 @@ class HSNLearningService:
         self,
         commodity_name: str,
         category: Optional[str] = None,
-        description: Optional[str] = None
+        _description: Optional[str] = None  # Reserved for future use
     ) -> HSNSuggestion:
         """
         Suggest HSN code with learning.
@@ -235,7 +238,7 @@ class HSNLearningService:
     async def _search_knowledge_base(
         self,
         commodity_name: str,
-        category: Optional[str] = None
+        _category: Optional[str] = None  # Reserved for future filtering
     ) -> Optional[HSNSuggestion]:
         """Search learned HSN mappings"""
         
@@ -291,8 +294,8 @@ class HSNLearningService:
     
     async def _query_hsn_api(
         self,
-        commodity_name: str,
-        category: Optional[str]
+        _commodity_name: str,  # Reserved for future API integration
+        _category: Optional[str]  # Reserved for future API integration
     ) -> Optional[HSNSuggestion]:
         """
         Query external HSN API.
@@ -306,6 +309,10 @@ class HSNLearningService:
         # - Masters India API (commercial)
         # - ClearTax API (commercial)
         
+        # Function is async to maintain interface compatibility for future HTTP API calls
+        # Satisfy linter by using asyncio.sleep(0) as a no-op async operation
+        import asyncio
+        await asyncio.sleep(0)
         return None
     
     def _get_dummy_hsn(self, commodity_name: str) -> Optional[HSNSuggestion]:

@@ -100,9 +100,17 @@ async def create_subscription(
     }
     ```
     """
-    # TODO: Get organization_id from current_user
-    # For now, using user_id as org_id
-    organization_id = current_user.id
+    # Get organization_id from current_user
+    # SUPER_ADMIN users have NULL organization_id - they manage webhooks globally
+    # INTERNAL users have organization_id - they manage webhooks for their org
+    # EXTERNAL users (partners) have business_partner_id - not allowed to create webhooks
+    organization_id = current_user.organization_id
+    
+    if organization_id is None and current_user.user_type != "SUPER_ADMIN":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only SUPER_ADMIN or organization users can create webhooks"
+        )
     
     # Generate secret
     import secrets

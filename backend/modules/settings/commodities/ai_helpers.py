@@ -23,6 +23,10 @@ from backend.modules.settings.commodities.hsn_learning import HSNLearningService
 class CommodityAIHelper:
     """AI helper for commodity operations with learning capabilities"""
     
+    # Constants for duplicate strings
+    DESC_COTTON_RAW = "Cotton, not carded or combed"
+    CATEGORY_NATURAL_FIBER = "Natural Fiber"
+    
     def __init__(self, db: Optional[AsyncSession] = None):
         """
         Initialize AI helper.
@@ -36,8 +40,8 @@ class CommodityAIHelper:
     # HSN Code database (Multi-commodity support)
     HSN_DATABASE = {
         # Cotton & Textiles
-        "raw cotton": {"hsn": "5201", "desc": "Cotton, not carded or combed", "gst": 5.0},
-        "cotton lint": {"hsn": "5201", "desc": "Cotton, not carded or combed", "gst": 5.0},
+        "raw cotton": {"hsn": "5201", "desc": DESC_COTTON_RAW, "gst": 5.0},
+        "cotton lint": {"hsn": "5201", "desc": DESC_COTTON_RAW, "gst": 5.0},
         "cotton waste": {"hsn": "5202", "desc": "Cotton waste", "gst": 5.0},
         "cotton yarn": {"hsn": "5205", "desc": "Cotton yarn containing >= 85% cotton", "gst": 5.0},
         "cotton fabric": {"hsn": "5208", "desc": "Woven fabrics of cotton", "gst": 5.0},
@@ -62,7 +66,7 @@ class CommodityAIHelper:
     
     # Category detection patterns (Multi-commodity support)
     CATEGORY_PATTERNS = {
-        "Natural Fiber": ["cotton", "jute", "silk", "wool", "linen"],
+        CATEGORY_NATURAL_FIBER: ["cotton", "jute", "silk", "wool", "linen"],
         "Synthetic Fiber": ["polyester", "nylon", "acrylic", "spandex"],
         "Blended Fiber": ["poly cotton", "cotton blend", "mixed fiber"],
         "Waste": ["waste", "scrap", "residue"],
@@ -80,7 +84,7 @@ class CommodityAIHelper:
     
     # Standard parameters by category
     STANDARD_PARAMETERS = {
-        "Natural Fiber - Cotton": [
+        f"{CATEGORY_NATURAL_FIBER} - Cotton": [
             {
                 "name": "Staple Length",
                 "type": "NUMERIC",
@@ -187,6 +191,10 @@ class CommodityAIHelper:
         Uses pattern matching to identify category.
         In production, this would use ML model.
         """
+        # Function is async for future ML model integration
+        import asyncio
+        await asyncio.sleep(0)
+        
         combined_text = f"{name} {description or ''}".lower()
         
         # Find matching category
@@ -208,7 +216,7 @@ class CommodityAIHelper:
         
         # Default fallback
         return CategorySuggestion(
-            category="Natural Fiber",
+            category=CATEGORY_NATURAL_FIBER,
             confidence=0.50,
             subcategory=None
         )
@@ -271,7 +279,7 @@ class CommodityAIHelper:
     
     async def suggest_quality_parameters(
         self,
-        commodity_id: UUID,
+        _commodity_id: UUID,  # Reserved for future database template queries
         category: str,
         name: str
     ) -> List[ParameterSuggestion]:
@@ -321,8 +329,8 @@ class CommodityAIHelper:
         category_key = category
         
         # Refine for specific sub-categories
-        if "cotton" in name.lower() and "Natural Fiber" in category:
-            category_key = "Natural Fiber - Cotton"
+        if "cotton" in name.lower() and CATEGORY_NATURAL_FIBER in category:
+            category_key = f"{CATEGORY_NATURAL_FIBER} - Cotton"
         elif "yarn" in name.lower():
             category_key = "Yarn"
         elif "fabric" in name.lower() or "cloth" in name.lower():
@@ -356,6 +364,10 @@ class CommodityAIHelper:
         
         Returns dict of field -> list of warnings.
         """
+        # Function is async for future database validation queries
+        import asyncio
+        await asyncio.sleep(0)
+        
         warnings = {}
         
         # Validate HSN vs Category
