@@ -17,6 +17,9 @@ class AppSettings(BaseSettings):
     ALLOWED_ORIGINS: str = "*"  # comma-separated for CORS
     REDIS_URL: str = "redis://localhost:6379/0"
     
+    # Default organization for new signups (multi-commodity support)
+    DEFAULT_ORGANIZATION_NAME: str = "Default Trading Co"
+    
     # GCP Secret Manager integration (15-year architecture)
     USE_SECRET_MANAGER: bool = False
     GCP_PROJECT_ID: str = ""

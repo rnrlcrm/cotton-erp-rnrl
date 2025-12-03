@@ -17,7 +17,7 @@ from backend.modules.settings.locations.models import Location
 from backend.modules.partners.models import BusinessPartner
 
 # Database URL
-DATABASE_URL = "postgresql+psycopg://postgres:postgres@localhost:5432/cotton_dev"
+DATABASE_URL = "postgresql+psycopg://postgres:postgres@localhost:5432/commodity_dev"
 
 
 async def test_auto_unit_population():

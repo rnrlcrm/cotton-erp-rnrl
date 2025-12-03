@@ -237,7 +237,7 @@ async def publish_event(
         "event_type": "trade.created",
         "data": {
             "trade_id": "123",
-            "commodity": "cotton",
+            "commodity": "wheat",
             "quantity": 1000
         },
         "priority": "high"

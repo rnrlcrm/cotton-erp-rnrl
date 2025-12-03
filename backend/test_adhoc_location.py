@@ -19,7 +19,7 @@ from backend.modules.partners.models import BusinessPartner
 DEFAULT_ORG_ID = uuid4()  # In real app, this would be fetched from organizations table
 
 # Database URL
-DATABASE_URL = "postgresql+psycopg://postgres:postgres@localhost:5432/cotton_dev"
+DATABASE_URL = "postgresql+psycopg://postgres:postgres@localhost:5432/commodity_dev"
 
 
 async def test_adhoc_location():

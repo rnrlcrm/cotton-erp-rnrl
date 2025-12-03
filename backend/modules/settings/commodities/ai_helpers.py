@@ -33,8 +33,9 @@ class CommodityAIHelper:
         self.db = db
         self.hsn_learning = HSNLearningService(db) if db else None
     
-    # HSN Code database (Cotton-specific)
+    # HSN Code database (Multi-commodity support)
     HSN_DATABASE = {
+        # Cotton & Textiles
         "raw cotton": {"hsn": "5201", "desc": "Cotton, not carded or combed", "gst": 5.0},
         "cotton lint": {"hsn": "5201", "desc": "Cotton, not carded or combed", "gst": 5.0},
         "cotton waste": {"hsn": "5202", "desc": "Cotton waste", "gst": 5.0},
@@ -43,9 +44,23 @@ class CommodityAIHelper:
         "cotton seed": {"hsn": "1207", "desc": "Oil seeds and oleaginous fruits", "gst": 5.0},
         "polyester": {"hsn": "5503", "desc": "Synthetic staple fibers", "gst": 18.0},
         "viscose": {"hsn": "5504", "desc": "Artificial staple fibers", "gst": 18.0},
+        
+        # Grains
+        "wheat": {"hsn": "1001", "desc": "Wheat and meslin", "gst": 5.0},
+        "rice": {"hsn": "1006", "desc": "Rice", "gst": 5.0},
+        "maize": {"hsn": "1005", "desc": "Maize (corn)", "gst": 5.0},
+        
+        # Precious Metals
+        "gold": {"hsn": "7108", "desc": "Gold (including gold plated with platinum)", "gst": 3.0},
+        "silver": {"hsn": "7106", "desc": "Silver (including silver plated with gold)", "gst": 3.0},
+        
+        # Edible Oils
+        "palm oil": {"hsn": "1511", "desc": "Palm oil and its fractions", "gst": 5.0},
+        "soybean oil": {"hsn": "1507", "desc": "Soya-bean oil and its fractions", "gst": 5.0},
+        "sunflower oil": {"hsn": "1512", "desc": "Sunflower-seed oil", "gst": 5.0},
     }
     
-    # Category detection patterns
+    # Category detection patterns (Multi-commodity support)
     CATEGORY_PATTERNS = {
         "Natural Fiber": ["cotton", "jute", "silk", "wool", "linen"],
         "Synthetic Fiber": ["polyester", "nylon", "acrylic", "spandex"],
@@ -54,6 +69,13 @@ class CommodityAIHelper:
         "Yarn": ["yarn", "thread", "spun"],
         "Fabric": ["fabric", "cloth", "textile"],
         "Seed": ["seed", "ginned"],
+        "Grains": ["wheat", "rice", "maize", "corn", "barley", "oats"],
+        "Precious Metals": ["gold", "silver", "platinum", "palladium"],
+        "Base Metals": ["copper", "aluminum", "aluminium", "steel", "iron", "zinc", "lead"],
+        "Edible Oils": ["oil", "palm oil", "soybean oil", "sunflower oil", "mustard oil", "coconut oil"],
+        "Pulses": ["dal", "chana", "chickpea", "lentil", "moong", "tur", "urad"],
+        "Spices": ["turmeric", "pepper", "cardamom", "cumin", "coriander", "chili"],
+        "Sugar": ["sugar", "jaggery", "gur"],
     }
     
     # Standard parameters by category

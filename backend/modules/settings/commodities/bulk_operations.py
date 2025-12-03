@@ -220,10 +220,15 @@ class BulkOperationService:
             cell.fill = header_fill
             cell.font = header_font
         
-        # Example data
+        # Example data (Multi-commodity samples)
         example_data = [
             ["", "Raw Cotton", "Natural Fiber", "5201", "5.0", "High quality raw cotton", "MT", "Yes"],
             ["", "Cotton Yarn", "Textile", "5205", "12.0", "Combed cotton yarn", "Bales", "Yes"],
+            ["", "Wheat", "Grains", "1001", "5.0", "Premium quality wheat", "MT", "Yes"],
+            ["", "Rice", "Grains", "1006", "5.0", "Basmati rice", "QTL", "Yes"],
+            ["", "Gold Bar", "Precious Metals", "7108", "3.0", "24K gold bars", "KG", "Yes"],
+            ["", "Palm Oil", "Edible Oils", "1511", "5.0", "Refined palm oil", "LITER", "Yes"],
+            ["", "Turmeric", "Spices", "0910", "5.0", "Organic turmeric", "KG", "Yes"],
         ]
         
         for row_num, data in enumerate(example_data, 2):

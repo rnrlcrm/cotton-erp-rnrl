@@ -35,7 +35,7 @@ class ShardedChannelManager:
     - User ID (e.g., "user:{user_id}")
     - Organization ID (e.g., "org:{org_id}")
     - Trade ID (e.g., "trade:{trade_id}")
-    - Custom channels (e.g., "market:cotton:prices")
+    - Custom channels (e.g., "market:wheat:prices", "market:gold:prices", etc.)
     """
     
     def __init__(

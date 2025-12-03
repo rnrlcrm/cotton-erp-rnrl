@@ -72,6 +72,75 @@ class HSNLearningService:
         # Synthetic fibers
         "polyester": {"hsn": "5503", "desc": "Synthetic staple fibers", "gst": 18.0},
         "viscose": {"hsn": "5504", "desc": "Artificial staple fibers", "gst": 18.0},
+        
+        # Precious Metals
+        "gold": {"hsn": "7108", "desc": "Gold (including gold plated with platinum)", "gst": 3.0},
+        "gold bar": {"hsn": "7108", "desc": "Gold in unwrought forms", "gst": 3.0},
+        "gold coin": {"hsn": "7118", "desc": "Coin (other than legal tender)", "gst": 3.0},
+        "silver": {"hsn": "7106", "desc": "Silver (including silver plated with gold)", "gst": 3.0},
+        "silver bar": {"hsn": "7106", "desc": "Silver in unwrought forms", "gst": 3.0},
+        "platinum": {"hsn": "7110", "desc": "Platinum, unwrought or in semi-manufactured forms", "gst": 3.0},
+        
+        # Base Metals
+        "copper": {"hsn": "7402", "desc": "Copper, unrefined; copper anodes", "gst": 18.0},
+        "copper wire": {"hsn": "7408", "desc": "Copper wire", "gst": 18.0},
+        "aluminum": {"hsn": "7601", "desc": "Aluminium, unwrought", "gst": 18.0},
+        "aluminium": {"hsn": "7601", "desc": "Aluminium, unwrought", "gst": 18.0},
+        "steel": {"hsn": "7214", "desc": "Bars and rods of iron or steel", "gst": 18.0},
+        "iron": {"hsn": "7203", "desc": "Ferrous products obtained by direct reduction", "gst": 18.0},
+        
+        # Edible Oils
+        "palm oil": {"hsn": "1511", "desc": "Palm oil and its fractions", "gst": 5.0},
+        "soybean oil": {"hsn": "1507", "desc": "Soya-bean oil and its fractions", "gst": 5.0},
+        "sunflower oil": {"hsn": "1512", "desc": "Sunflower-seed oil", "gst": 5.0},
+        "mustard oil": {"hsn": "1514", "desc": "Rape, colza or mustard oil", "gst": 5.0},
+        "coconut oil": {"hsn": "1513", "desc": "Coconut (copra) oil", "gst": 5.0},
+        "groundnut oil": {"hsn": "1508", "desc": "Groundnut oil and its fractions", "gst": 5.0},
+        
+        # Sugar & Sweeteners
+        "sugar": {"hsn": "1701", "desc": "Cane or beet sugar", "gst": 5.0},
+        "jaggery": {"hsn": "1701", "desc": "Cane or beet sugar (jaggery)", "gst": 5.0},
+        "gur": {"hsn": "1701", "desc": "Cane or beet sugar (gur)", "gst": 5.0},
+        
+        # Spices
+        "turmeric": {"hsn": "0910", "desc": "Ginger, saffron, turmeric", "gst": 5.0},
+        "haldi": {"hsn": "0910", "desc": "Turmeric (curcuma)", "gst": 5.0},
+        "black pepper": {"hsn": "0904", "desc": "Pepper of the genus Piper", "gst": 5.0},
+        "pepper": {"hsn": "0904", "desc": "Pepper of the genus Piper", "gst": 5.0},
+        "cardamom": {"hsn": "0908", "desc": "Cardamoms", "gst": 5.0},
+        "elaichi": {"hsn": "0908", "desc": "Cardamoms", "gst": 5.0},
+        "cumin": {"hsn": "0909", "desc": "Seeds of anise, badian, fennel, coriander, cumin", "gst": 5.0},
+        "jeera": {"hsn": "0909", "desc": "Cumin seeds", "gst": 5.0},
+        "coriander": {"hsn": "0909", "desc": "Coriander seeds", "gst": 5.0},
+        "dhaniya": {"hsn": "0909", "desc": "Coriander seeds", "gst": 5.0},
+        
+        # Nuts & Dried Fruits
+        "cashew": {"hsn": "0801", "desc": "Cashew nuts", "gst": 5.0},
+        "almond": {"hsn": "0802", "desc": "Almonds", "gst": 5.0},
+        "walnut": {"hsn": "0802", "desc": "Walnuts", "gst": 5.0},
+        "pistachio": {"hsn": "0802", "desc": "Pistachios", "gst": 5.0},
+        "raisin": {"hsn": "0806", "desc": "Grapes, dried (raisins)", "gst": 5.0},
+        "dates": {"hsn": "0804", "desc": "Dates, figs, pineapples", "gst": 5.0},
+        
+        # Chemicals
+        "urea": {"hsn": "3102", "desc": "Mineral or chemical fertilisers, nitrogenous", "gst": 5.0},
+        "fertilizer": {"hsn": "3102", "desc": "Mineral or chemical fertilisers", "gst": 5.0},
+        "pesticide": {"hsn": "3808", "desc": "Insecticides, rodenticides, fungicides", "gst": 18.0},
+        
+        # Plastics
+        "plastic granules": {"hsn": "3901", "desc": "Polymers of ethylene, in primary forms", "gst": 18.0},
+        "pvc": {"hsn": "3904", "desc": "Polymers of vinyl chloride", "gst": 18.0},
+        "hdpe": {"hsn": "3901", "desc": "Polyethylene having a specific gravity of 0.94 or more", "gst": 18.0},
+        "ldpe": {"hsn": "3901", "desc": "Polyethylene having a specific gravity of less than 0.94", "gst": 18.0},
+        
+        # Rubber
+        "rubber": {"hsn": "4001", "desc": "Natural rubber", "gst": 18.0},
+        "synthetic rubber": {"hsn": "4002", "desc": "Synthetic rubber", "gst": 18.0},
+        
+        # Paper & Pulp
+        "paper": {"hsn": "4802", "desc": "Uncoated paper and paperboard", "gst": 12.0},
+        "kraft paper": {"hsn": "4804", "desc": "Uncoated kraft paper", "gst": 12.0},
+        "pulp": {"hsn": "4703", "desc": "Chemical wood pulp", "gst": 12.0},
     }
     
     def __init__(self, db: AsyncSession):

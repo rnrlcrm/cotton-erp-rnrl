@@ -178,7 +178,7 @@ async def main():
     # Get configuration from environment
     database_url = os.getenv(
         "DATABASE_URL",
-        "postgresql+asyncpg://cotton_user:cotton_password@localhost:5432/cotton_erp"
+        "postgresql+asyncpg://commodity_user:commodity_password@localhost:5432/commodity_erp"
     )
     
     project_id = os.getenv("GCP_PROJECT_ID")

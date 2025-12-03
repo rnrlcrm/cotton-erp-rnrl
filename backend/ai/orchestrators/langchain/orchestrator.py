@@ -166,43 +166,46 @@ Provide a concise analysis.
 """
     
     CONTRACT_REVIEW = """
-You are a legal AI assistant reviewing cotton trading contracts.
+You are a legal AI assistant reviewing commodity trading contracts.
 
-Review this contract:
+Review this {commodity_type} trading contract:
 {contract_text}
 
 Check for:
 1. Missing clauses
 2. Risk factors
 3. Compliance issues
+4. Commodity-specific regulations
 
 Provide recommendations.
 """
     
     QUALITY_ASSESSMENT = """
-You are a quality assessment AI for cotton inspection.
+You are a quality assessment AI for commodity inspection and grading.
 
-Based on these inspection results:
+Based on these {commodity_type} inspection results:
 {inspection_data}
 
 Determine:
-1. Quality grade
-2. Acceptance/rejection
-3. Price adjustment
+1. Quality grade (according to {commodity_type} standards)
+2. Acceptance/rejection recommendation
+3. Price adjustment suggestion
+4. Compliance with quality parameters
 
 Provide assessment.
 """
     
     MARKET_INSIGHTS = """
-You are a market analyst AI for the cotton industry.
+You are a market analyst AI for commodity trading.
 
-Analyze these market conditions:
+Analyze these {commodity_type} market conditions:
 {market_data}
 
 Provide:
 1. Price forecast
 2. Supply/demand analysis
 3. Trading recommendations
+4. Market trend insights
 
 Be specific and data-driven.
 """

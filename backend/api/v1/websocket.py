@@ -95,10 +95,10 @@ async def websocket_endpoint(
         }
     };
     
-    // Subscribe to channel
+    // Subscribe to channel (supports any commodity)
     ws.send(JSON.stringify({
         event: 'subscribe',
-        channel: 'market:cotton:prices'
+        channel: 'market:wheat:prices'  // Can be: cotton, wheat, gold, rice, oil, etc.
     }));
     ```
     """

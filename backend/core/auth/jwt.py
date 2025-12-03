@@ -28,7 +28,7 @@ def create_token(sub: str, org_id: str, minutes: int | None = None, days: int | 
         "exp": int(exp.timestamp()),
         "jti": str(uuid4()),
         "type": token_type,
-        "iss": "cotton-erp",
+        "iss": "commodity-erp",
     }
     return jwt.encode(payload, settings.JWT_SECRET, algorithm=settings.JWT_ALG)
 
