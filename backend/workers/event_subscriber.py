@@ -56,7 +56,7 @@ class EventSubscriber:
         
         # Subscribe to all topics
         await self.subscriber.subscribe(
-            subscription_name="cotton-erp-domain-events-sub",
+            subscription_name="commodity-erp-domain-events-sub",
             topic_name="domain-events",
         )
         

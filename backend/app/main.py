@@ -108,7 +108,7 @@ def create_app() -> FastAPI:
 				from backend.core.observability.gcp import configure_gcp_observability, instrument_application
 				
 				config = configure_gcp_observability(
-					service_name="cotton-erp-backend",
+					service_name="commodity-erp-backend",
 					project_id=gcp_project_id,
 					enable_traces=True,
 					enable_metrics=True,
@@ -128,7 +128,7 @@ def create_app() -> FastAPI:
 			# Development/Custom: Use OTLP endpoint
 			try:
 				resource = Resource(attributes={
-					"service.name": "cotton-erp-backend",
+					"service.name": "commodity-erp-backend",
 					"service.version": "1.0.0",
 					"deployment.environment": os.getenv("ENV", "development")
 				})

@@ -79,7 +79,7 @@ class EventEmitter:
         # 2. Store in event_outbox for async publishing to Pub/Sub
         if topic_name is None:
             # Default topic from environment
-            topic_name = os.getenv("PUBSUB_TOPIC_EVENTS", "cotton-erp-events")
+            topic_name = os.getenv("PUBSUB_TOPIC_EVENTS", "commodity-erp-events")
         
         # Build idempotency key from event
         idempotency_key = None

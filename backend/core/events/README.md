@@ -193,9 +193,9 @@ Examples:
 ### For CREATE events:
 ```json
 {
-  "name": "Cotton Mills Ltd",
+  "name": "Commodity Trading Ltd",
   "type": "corporation",
-  "email": "contact@cottonmills.com"
+  "email": "contact@commoditytrading.com"
 }
 ```
 

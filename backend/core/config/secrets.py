@@ -17,7 +17,7 @@ Usage:
     
     # Production (uses GCP Secret Manager)
     export USE_SECRET_MANAGER=true
-    export GCP_PROJECT_ID=cotton-erp-prod
+    export GCP_PROJECT_ID=commodity-erp-prod
     python -m uvicorn main:app
 """
 

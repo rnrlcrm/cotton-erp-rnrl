@@ -32,7 +32,7 @@ logger = logging.getLogger(__name__)
 
 
 def configure_gcp_observability(
-    service_name: str = "cotton-erp-backend",
+    service_name: str = "commodity-erp-backend",
     project_id: Optional[str] = None,
     enable_traces: bool = True,
     enable_metrics: bool = True,
@@ -58,8 +58,8 @@ def configure_gcp_observability(
         from backend.core.observability.gcp import configure_gcp_observability
         
         configure_gcp_observability(
-            service_name="cotton-erp-backend",
-            project_id="cotton-erp-prod"
+            service_name="commodity-erp-backend",
+            project_id="commodity-erp-prod"
         )
         ```
     """
@@ -196,7 +196,7 @@ def get_business_metrics():
         trade_counter.add(1, {"status": "success", "partner_type": "buyer"})
         ```
     """
-    return metrics.get_meter("cotton_erp.business")
+    return metrics.get_meter("commodity_erp.business")
 
 
 # SLO Definitions (for alerting)
@@ -250,7 +250,7 @@ def create_slo_alerts(project_id: str):
                 monitoring_v3.AlertPolicy.Condition(
                     display_name="API availability < 99.9%",
                     condition_threshold=monitoring_v3.AlertPolicy.Condition.MetricThreshold(
-                        filter='metric.type="custom.googleapis.com/cotton_erp/api/availability"',
+                        filter='metric.type="custom.googleapis.com/commodity_erp/api/availability"',
                         comparison=monitoring_v3.ComparisonType.COMPARISON_LT,
                         threshold_value=0.999,
                         duration={"seconds": 300},

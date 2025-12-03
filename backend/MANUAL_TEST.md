@@ -16,7 +16,7 @@ python -c "
 from sqlalchemy import create_engine, text
 import uuid
 
-engine = create_engine('postgresql+psycopg://postgres:postgres@localhost:5432/cotton_dev')
+engine = create_engine('postgresql+psycopg://postgres:postgres@localhost:5432/commodity_dev')
 
 with engine.connect() as conn:
     # Check if location_id is nullable
@@ -42,7 +42,7 @@ with engine.connect() as conn:
 
 ```bash
 cd /workspaces/cotton-erp-rnrl/backend
-docker exec cotton-erp-postgres psql -U postgres -d cotton_dev -c "
+docker exec commodity-erp-postgres psql -U postgres -d commodity_dev -c "
 SELECT 
     column_name,
     is_nullable,
@@ -152,7 +152,7 @@ Run this one-liner to confirm everything is ready:
 cd /workspaces/cotton-erp-rnrl/backend && \
 echo "1. Migration Status:" && alembic current && \
 echo -e "\n2. Database Schema:" && \
-docker exec cotton-erp-postgres psql -U postgres -d cotton_dev -c \
+docker exec commodity-erp-postgres psql -U postgres -d commodity_dev -c \
 "SELECT is_nullable FROM information_schema.columns WHERE table_name='availabilities' AND column_name='location_id';" && \
 echo -e "\n3. Server Status:" && \
 (curl -s http://localhost:8000/health > /dev/null 2>&1 && echo "✅ Server running" || echo "⚠️ Server not running - start with: python -m uvicorn app.main:app --reload")
