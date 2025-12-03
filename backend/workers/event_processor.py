@@ -176,10 +176,12 @@ class EventProcessor:
 async def main():
     """Main entry point."""
     # Get configuration from environment
-    database_url = os.getenv(
-        "DATABASE_URL",
-        "postgresql+asyncpg://commodity_user:commodity_password@localhost:5432/commodity_erp"
-    )
+    database_url = os.getenv("DATABASE_URL")
+    if not database_url:
+        raise ValueError(
+            "DATABASE_URL environment variable is required. "
+            "Set it to your PostgreSQL connection string."
+        )
     
     project_id = os.getenv("GCP_PROJECT_ID")
     

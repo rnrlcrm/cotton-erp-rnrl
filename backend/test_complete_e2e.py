@@ -20,7 +20,11 @@ from backend.modules.settings.locations.models import Location
 from backend.modules.partners.models import BusinessPartner
 
 # Database URL
-DATABASE_URL = "postgresql+psycopg://postgres:postgres@localhost:5432/commodity_dev"
+# ⚠️ SECURITY WARNING: Hardcoded credentials for LOCAL TESTING ONLY
+DATABASE_URL = os.getenv(
+    "TEST_DATABASE_URL",
+    "postgresql+psycopg://postgres:postgres@localhost:5432/commodity_dev"  # Test fallback only
+)
 
 # Global test data
 # Use existing organization from database

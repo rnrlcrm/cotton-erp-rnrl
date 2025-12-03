@@ -20,7 +20,11 @@ from backend.core.auth.jwt import create_token
 
 
 # Test database
-SQLALCHEMY_DATABASE_URL = "postgresql+psycopg://postgres:postgres@localhost:5432/cotton_dev"
+# ⚠️ SECURITY WARNING: Hardcoded credentials for LOCAL TESTING ONLY
+SQLALCHEMY_DATABASE_URL = os.getenv(
+    "TEST_DATABASE_URL",
+    "postgresql+psycopg://postgres:postgres@localhost:5432/cotton_dev"  # Test fallback only
+)
 engine = create_engine(SQLALCHEMY_DATABASE_URL)
 TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 

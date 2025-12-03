@@ -70,7 +70,8 @@ def get_database_url() -> str:
     # Keep in sync with backend/db/session.py default for now
     return os.getenv(
         "DATABASE_URL",
-        "postgresql+psycopg://postgres:postgres@localhost:5432/cotton_dev",
+        # ⚠️ SECURITY: Use environment variable in production
+        "postgresql+psycopg://postgres:postgres@localhost:5432/cotton_dev",  # Dev fallback only
     )
 
 

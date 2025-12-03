@@ -9,10 +9,12 @@ from sqlalchemy.orm import declarative_base, sessionmaker, Session
 # NOTE: For initial scaffolding we read DATABASE_URL from env; later move to settings module.
 import os
 
-DATABASE_URL = os.getenv(
-	"DATABASE_URL",
-	"postgresql+psycopg://postgres:postgres@localhost:5432/cotton_dev",
-)
+DATABASE_URL = os.getenv("DATABASE_URL")
+if not DATABASE_URL:
+	raise ValueError(
+		"DATABASE_URL environment variable is required. "
+		"Example: postgresql+psycopg://user:pass@localhost:5432/dbname"
+	)
 
 engine = create_engine(DATABASE_URL, echo=False, future=True)
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False, expire_on_commit=False, future=True)
