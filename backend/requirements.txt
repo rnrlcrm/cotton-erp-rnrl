@@ -113,7 +113,7 @@ statsmodels==0.14.1  # ARIMA short-term forecasting
 
 # NLP & Sentiment Analysis (Local - FREE)
 transformers==4.35.2  # HuggingFace models (DistilBERT)
-torch==2.1.2  # PyTorch for transformers
+torch==2.2.0  # PyTorch for transformers (updated for Python 3.12)
 tokenizers==0.15.0  # Fast tokenization
 
 # Model Utilities

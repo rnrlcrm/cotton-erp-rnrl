@@ -211,6 +211,29 @@ def create_app() -> FastAPI:
 	app.include_router(session_router, prefix="/api/v1", tags=["sessions"])
 	app.include_router(risk_router, prefix="/api/v1", tags=["risk"])
 	
+	# AI Infrastructure Startup
+	@app.on_event("startup")
+	async def startup_ai_services():
+		"""Initialize AI services on application startup."""
+		try:
+			from backend.ai.startup import initialize_ai_services
+			from backend.db.async_session import get_async_db
+			from backend.core.events.event_bus import get_event_bus
+			
+			# Get database session
+			db = await anext(get_async_db())
+			
+			# Get event bus
+			event_bus = get_event_bus(db)
+			
+			# Initialize AI services (vector sync, guardrails, memory)
+			await initialize_ai_services(db, redis=None, event_bus=event_bus)
+			
+			print("✅ AI services initialized successfully")
+		except Exception as e:
+			print(f"⚠️  Failed to initialize AI services: {e}")
+			# Don't fail app startup if AI initialization fails
+	
 	return app
 
 
