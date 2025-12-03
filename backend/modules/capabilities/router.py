@@ -25,7 +25,7 @@ from backend.core.auth.capabilities.decorators import RequireCapability
 from backend.core.auth.capabilities.models import Capability, RoleCapability, UserCapability
 from backend.core.auth.deps import get_current_user
 from backend.db.session import get_db
-from backend.modules.auth.models import User
+from backend.modules.settings.models.settings_models import User
 from backend.modules.capabilities.schemas import (
     CapabilityCheckRequest,
     CapabilityCheckResponse,
@@ -111,7 +111,7 @@ async def get_user_capabilities(
     direct_caps = direct_result.scalars().all()
     
     # Get role capabilities
-    from backend.modules.auth.models import UserRole
+    from backend.modules.settings.models.settings_models import UserRole
     
     role_query = (
         select(RoleCapability)
@@ -272,7 +272,7 @@ async def get_my_capabilities(
     direct_caps = direct_result.scalars().all()
     
     # Get role capabilities
-    from backend.modules.auth.models import UserRole
+    from backend.modules.settings.models.settings_models import UserRole
     
     role_query = (
         select(RoleCapability)

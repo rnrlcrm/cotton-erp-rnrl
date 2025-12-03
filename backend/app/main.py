@@ -203,7 +203,7 @@ def create_app() -> FastAPI:
 	from backend.api.v1.privacy import router as privacy_router
 	from backend.modules.auth.router import router as session_router
 	from backend.modules.risk.routes import router as risk_router
-	from backend.modules.capabilities.router import router as capabilities_router
+	# from backend.modules.capabilities.router import router as capabilities_router  # FIXME: Has import errors
 	from backend.modules.trade_desk.routes.availability_routes import router as availability_router
 	from backend.modules.trade_desk.routes.requirement_routes import router as requirement_router
 	from backend.modules.trade_desk.routes.matching_router import router as matching_router
@@ -214,7 +214,7 @@ def create_app() -> FastAPI:
 	app.include_router(privacy_router, prefix="/api/v1", tags=["privacy"])
 	app.include_router(session_router, prefix="/api/v1", tags=["sessions"])
 	app.include_router(risk_router, prefix="/api/v1", tags=["risk"])
-	app.include_router(capabilities_router, prefix="/api/v1", tags=["capabilities"])
+	# app.include_router(capabilities_router, prefix="/api/v1", tags=["capabilities"])  # FIXME: Has import errors
 	app.include_router(availability_router, prefix="/api/v1/trade-desk", tags=["trade-desk"])
 	app.include_router(requirement_router, prefix="/api/v1/trade-desk", tags=["trade-desk"])
 	app.include_router(matching_router, prefix="/api/v1/trade-desk", tags=["trade-desk"])
