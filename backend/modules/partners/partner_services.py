@@ -1157,18 +1157,19 @@ class PartnerService:
         )
         
         # Emit event
-        await self.outbox_repo.save_event(
-            aggregate_id=str(partner_id),
+        await self.outbox_repo.add_event(
+            aggregate_id=partner_id,
             aggregate_type="BusinessPartner",
-            event_type="partner.location.added",
-            event_data={
+            event_type="PartnerLocationAdded",
+            payload={
                 "partner_id": str(partner_id),
                 "location_id": str(location.id),
                 "location_type": location_data.location_type,
                 "city": location_data.city,
                 "state": location_data.state
             },
-            user_id=self.current_user_id
+            topic_name="partner-events",
+            metadata={"user_id": str(self.current_user_id)}
         )
         
         return location

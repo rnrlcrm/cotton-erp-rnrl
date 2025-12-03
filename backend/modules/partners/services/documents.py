@@ -191,17 +191,18 @@ class PartnerDocumentService:
         )
         
         # Emit event
-        await self.outbox_repo.save_event(
-            aggregate_id=str(application_id),
+        await self.outbox_repo.add_event(
+            aggregate_id=application_id,
             aggregate_type="OnboardingApplication",
-            event_type="partner.document.uploaded",
-            event_data={
+            event_type="PartnerDocumentUploaded",
+            payload={
                 "application_id": str(application_id),
                 "document_id": str(document.id),
                 "document_type": document_type,
                 "ocr_confidence": extracted_data.get("confidence", 0)
             },
-            user_id=uploaded_by
+            topic_name="partner-events",
+            metadata={"user_id": str(uploaded_by)}
         )
         
         return document
