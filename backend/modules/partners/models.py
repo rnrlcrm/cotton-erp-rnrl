@@ -88,27 +88,10 @@ class BusinessPartner(Base, EventMixin):
         comment="Auto-generated: BP-IND-SEL-0001"
     )
     
-    # DEPRECATED: Will be removed after CDPS migration
-    # Use entity_class + capabilities instead
-    partner_type = Column(
-        String(20),
-        nullable=True,  # Changed to nullable for migration
-        index=True,
-        comment="DEPRECATED: seller, buyer, trader, broker, sub_broker, transporter, controller, financer, shipping_agent, importer, exporter"
-    )
-    
     service_provider_type = Column(
         String(50),
         nullable=True,
         comment="For service providers: broker, sub_broker, transporter, controller, financer, shipping_agent"
-    )
-    
-    # DEPRECATED: Will be removed after CDPS migration
-    # Use capabilities (domestic_buy_india, domestic_sell_india, import_allowed, export_allowed) instead
-    trade_classification = Column(
-        String(20),
-        nullable=True,
-        comment="DEPRECATED: domestic, exporter (foreign selling to India), importer (foreign buying from India)"
     )
     
     # ============================================
@@ -582,9 +565,9 @@ class PartnerOnboardingApplication(Base):
     )
     
     # Same fields as BusinessPartner (copy-paste for simplicity)
-    partner_type = Column(String(20), nullable=False)
     service_provider_type = Column(String(50), nullable=True)
-    trade_classification = Column(String(20), nullable=True)
+    entity_class = Column(String(20), nullable=True, comment="business_entity or service_provider")
+    capabilities = Column(JSON, nullable=True, comment="Trading capabilities from CDPS")
     
     legal_name = Column(String(500), nullable=False)
     trade_name = Column(String(500), nullable=True)

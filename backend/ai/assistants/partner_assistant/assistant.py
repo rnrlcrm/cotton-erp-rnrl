@@ -2,6 +2,7 @@
 Partner Assistant Implementation
 
 AI-powered assistant for business partner onboarding and management.
+Uses capability-based partner system (CDPS) instead of old partner_type classification.
 """
 
 from typing import Dict, List, Optional
@@ -36,26 +37,36 @@ class PartnerAssistant:
     
     async def assist_onboarding_start(
         self,
-        partner_type: str,
+        entity_class: str,
+        service_provider_type: Optional[str] = None,
         user_message: Optional[str] = None
     ) -> Dict:
         """
-        Guide user through onboarding start.
+        Guide user through onboarding start using CDPS (Capability-Driven Partner System).
         
         Args:
-            partner_type: Type of partner (seller/buyer/transporter/etc.)
+            entity_class: "business_entity" or "service_provider"
+            service_provider_type: For service providers: broker, transporter, controller, etc.
             user_message: Optional user query
         
         Returns:
             Dict with guidance, required fields, and next steps
         """
         # Get partner-specific requirements
-        requirements = await self.tools.get_onboarding_requirements(partner_type)
+        requirements = await self.tools.get_onboarding_requirements(entity_class, service_provider_type)
+        
+        # Determine friendly name
+        if entity_class == "business_entity":
+            friendly_name = "business entity (trader/farmer/mill/ginner)"
+        elif service_provider_type:
+            friendly_name = service_provider_type.replace("_", " ")
+        else:
+            friendly_name = "service provider"
         
         response = {
-            "greeting": f"Welcome! Let's get you onboarded as a {partner_type}.",
+            "greeting": f"Welcome! Let's get you onboarded as a {friendly_name}.",
             "requirements": requirements,
-            "estimated_time": self._estimate_onboarding_time(partner_type),
+            "estimated_time": self._estimate_onboarding_time(entity_class, service_provider_type),
             "next_steps": [
                 "Enter basic business information (Name, GST, PAN)",
                 "We'll auto-fetch and verify your GST details",
@@ -68,25 +79,36 @@ class PartnerAssistant:
                 "Ensure GST number is active and valid",
                 "Business address should match GST registration",
                 "PAN should be linked to the business entity"
-            ]
+            ],
+            "cdps_info": {
+                "title": "Automatic Capability Detection",
+                "message": "Your trading rights (buy/sell/import/export) will be AUTO-DETECTED from your verified documents.",
+                "examples": [
+                    "GST + PAN = Domestic buy & sell rights in India",
+                    "GST + PAN + IEC = Import & export rights",
+                    "Service providers CANNOT trade commodities directly"
+                ]
+            }
         }
         
-        # Add partner-type specific guidance
-        if partner_type == "transporter":
+        # Add entity-specific guidance
+        if entity_class == "business_entity":
+            response["additional_info"] = {
+                "message": "As a business entity, you can buy and/or sell commodities",
+                "capability_detection": "System will auto-detect if you can buy, sell, import, or export based on your documents",
+                "credit_approval": "Credit limits assigned based on risk assessment"
+            }
+        elif service_provider_type == "transporter":
             response["additional_info"] = {
                 "message": "As a transporter, you can also add vehicle details",
                 "vehicle_types": ["Open Body", "Container", "Tanker", "Trailer"],
                 "required_docs": ["RC Book", "Insurance", "Fitness Certificate"]
             }
-        elif partner_type == "buyer":
-            response["additional_info"] = {
-                "message": "Buyers get credit limits based on risk assessment",
-                "credit_approval": "Auto-approved for low risk, manual review for others"
-            }
-        elif partner_type in ["broker", "sub_broker"]:
+        elif service_provider_type in ["broker", "sub_broker"]:
             response["additional_info"] = {
                 "message": "Brokers need to specify service areas and commodities",
-                "commission_setup": "Commission rates configured after approval"
+                "commission_setup": "Commission rates configured after approval",
+                "note": "Brokers facilitate trades but cannot trade directly"
             }
         
         return response
@@ -466,13 +488,27 @@ class PartnerAssistant:
             "Please ask a specific question!"
         )
     
-    def _estimate_onboarding_time(self, partner_type: str) -> str:
-        """Estimate onboarding completion time."""
-        if partner_type == "transporter":
-            return "20-30 minutes (including vehicle details)"
-        elif partner_type in ["broker", "sub_broker"]:
-            return "15-20 minutes (including service areas)"
-        else:
+    def _estimate_onboarding_time(self, entity_class: str, service_provider_type: Optional[str] = None) -> str:
+        """
+        Estimate onboarding completion time based on entity class (CDPS).
+        
+        Args:
+            entity_class: "business_entity" or "service_provider"
+            service_provider_type: For service providers
+        
+        Returns:
+            Estimated time range
+        """
+        if entity_class == "service_provider":
+            if service_provider_type == "transporter":
+                return "20-30 minutes (including vehicle details)"
+            elif service_provider_type in ["broker", "sub_broker"]:
+                return "15-20 minutes (including service areas)"
+            elif service_provider_type == "financer":
+                return "25-35 minutes (additional compliance docs required)"
+            else:
+                return "15-20 minutes"
+        else:  # business_entity
             return "15-20 minutes"
     
     def _create_status_summary(self, status: Dict) -> str:

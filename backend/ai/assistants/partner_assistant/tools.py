@@ -2,6 +2,7 @@
 Partner Assistant Tools
 
 Helper tools for partner onboarding and management operations.
+Uses capability-based partner system (CDPS) instead of old partner_type classification.
 """
 
 from typing import Dict, List, Optional
@@ -9,7 +10,7 @@ from uuid import UUID
 
 from sqlalchemy.orm import Session
 
-from backend.modules.partners.enums import PartnerType, DocumentType
+from backend.modules.partners.enums import DocumentType, ServiceProviderType, BusinessEntityType
 
 
 class PartnerTools:
@@ -28,17 +29,18 @@ class PartnerTools:
         """
         self.db = db
     
-    async def get_onboarding_requirements(self, partner_type: str) -> Dict:
+    async def get_onboarding_requirements(self, entity_class: str, service_provider_type: Optional[str] = None) -> Dict:
         """
-        Get onboarding requirements for partner type.
+        Get onboarding requirements based on entity classification (CDPS).
         
         Args:
-            partner_type: Type of partner
+            entity_class: "business_entity" or "service_provider"
+            service_provider_type: For service providers: broker, transporter, controller, financer, etc.
         
         Returns:
             Dict with required fields and documents
         """
-        # Common requirements for all partner types
+        # Common requirements for ALL partners
         common_requirements = {
             "basic_info": [
                 "Business name (as per GST)",
@@ -58,112 +60,110 @@ class PartnerTools:
                 "GST Registration Certificate",
                 "PAN Card",
                 "Bank Account Proof (Cancelled Cheque)"
-            ]
+            ],
+            "cdps_note": "Trading capabilities (buy/sell/import/export) will be auto-detected from your verified documents"
         }
         
-        # Partner-type specific requirements
-        type_specific = {}
+        # Entity class specific requirements
+        entity_specific = {}
         
-        if partner_type == PartnerType.BUYER.value:
-            type_specific = {
-                "buyer_specific": [
-                    "Monthly purchase volume estimate",
+        if entity_class == "business_entity":
+            # Business entities that can trade (farmers, mills, traders, etc.)
+            entity_specific = {
+                "business_entity_info": [
+                    "Monthly trading volume estimate",
                     "Preferred payment terms (days)",
-                    "Credit limit requested (optional)"
-                ],
-                "note": "Credit limit will be assigned based on risk assessment"
-            }
-        
-        elif partner_type == PartnerType.SELLER.value:
-            type_specific = {
-                "seller_specific": [
-                    "Production capacity per month",
+                    "Credit limit requested (optional)",
                     "Can arrange transport? (Yes/No)",
                     "Has quality testing lab? (Yes/No)"
                 ],
-                "note": "Higher production capacity and quality lab increase trust score"
+                "capabilities_auto_detected": {
+                    "domestic_buy_india": "Auto-granted if you have GST + PAN",
+                    "domestic_sell_india": "Auto-granted if you have GST + PAN",
+                    "import_allowed": "Requires IEC certificate",
+                    "export_allowed": "Requires IEC certificate"
+                },
+                "note": "You can buy, sell, or both based on your documents. System will auto-detect."
             }
-        
-        elif partner_type == PartnerType.TRANSPORTER.value:
-            type_specific = {
-                "transporter_specific": [
-                    "Fleet size (number of vehicles)",
-                    "Vehicle types (Open Body/Container/Tanker/etc.)",
-                    "Service coverage areas (states/regions)"
-                ],
-                "vehicles": [
-                    "Vehicle registration numbers",
-                    "Vehicle RC book copy",
-                    "Insurance certificate",
-                    "Fitness certificate"
-                ],
-                "note": "Add vehicle details after account approval"
-            }
-        
-        elif partner_type in [PartnerType.BROKER.value, PartnerType.SUB_BROKER.value]:
-            type_specific = {
-                "broker_specific": [
+            
+        elif entity_class == "service_provider":
+            # Service providers (brokers, transporters, controllers, etc.)
+            entity_specific = {
+                "service_provider_info": [
+                    "Service type (broker/transporter/controller/financer)",
                     "Service coverage areas",
-                    "Commodities handled",
-                    "Years of experience in commodity trade"
+                    "Years of experience"
                 ],
-                "commission": "Commission rates configured after approval",
-                "note": "Sub-brokers must specify parent broker"
+                "note": "Service providers CANNOT trade commodities directly. They facilitate trading services."
             }
-        
-        elif partner_type == PartnerType.TRADER.value:
-            type_specific = {
-                "trader_specific": [
-                    "Trade classification (Domestic/Exporter/Importer)",
-                    "Annual trading volume",
-                    "Markets served"
-                ],
-                "note": "Can act as both buyer and seller"
-            }
-        
-        elif partner_type == PartnerType.CONTROLLER.value:
-            type_specific = {
-                "controller_specific": [
-                    "Service types offered",
-                    "Coverage areas",
-                    "Team size"
-                ],
-                "note": "Controllers manage quality inspections and logistics"
-            }
-        
-        elif partner_type == PartnerType.FINANCER.value:
-            type_specific = {
-                "financer_specific": [
-                    "Financing products offered",
-                    "Interest rates",
-                    "Maximum financing amount"
-                ],
-                "documents": [
-                    "NBFC registration (if applicable)",
-                    "RBI license (if applicable)"
-                ],
-                "note": "Additional regulatory compliance required"
-            }
-        
-        elif partner_type in [PartnerType.IMPORTER.value, PartnerType.EXPORTER.value]:
-            type_specific = {
-                "import_export_specific": [
-                    "IEC (Import Export Code)",
-                    "Countries traded with",
-                    "Annual import/export volume"
-                ],
-                "documents": [
-                    "IEC certificate",
-                    "DGFT registration"
-                ],
-                "note": "International trade compliance documents required"
-            }
+            
+            # Service provider type specific requirements
+            if service_provider_type == ServiceProviderType.TRANSPORTER.value:
+                entity_specific.update({
+                    "transporter_specific": [
+                        "Fleet size (number of vehicles)",
+                        "Vehicle types (Open Body/Container/Tanker/etc.)",
+                        "Service coverage areas (states/regions)"
+                    ],
+                    "vehicles": [
+                        "Vehicle registration numbers",
+                        "Vehicle RC book copy",
+                        "Insurance certificate",
+                        "Fitness certificate"
+                    ],
+                    "note": "Add vehicle details after account approval"
+                })
+            
+            elif service_provider_type == ServiceProviderType.BROKER.value:
+                entity_specific.update({
+                    "broker_specific": [
+                        "Service coverage areas",
+                        "Commodities handled",
+                        "Years of experience in commodity trade"
+                    ],
+                    "commission": "Commission rates configured after approval"
+                })
+            
+            elif service_provider_type == ServiceProviderType.SUB_BROKER.value:
+                entity_specific.update({
+                    "sub_broker_specific": [
+                        "Parent broker details",
+                        "Service coverage areas",
+                        "Commodities handled"
+                    ],
+                    "note": "Sub-brokers must specify parent broker"
+                })
+            
+            elif service_provider_type == ServiceProviderType.CONTROLLER.value:
+                entity_specific.update({
+                    "controller_specific": [
+                        "Service types offered",
+                        "Coverage areas",
+                        "Team size"
+                    ],
+                    "note": "Controllers manage quality inspections and logistics"
+                })
+            
+            elif service_provider_type == ServiceProviderType.FINANCER.value:
+                entity_specific.update({
+                    "financer_specific": [
+                        "Financing products offered",
+                        "Interest rates",
+                        "Maximum financing amount"
+                    ],
+                    "documents": [
+                        "NBFC registration (if applicable)",
+                        "RBI license (if applicable)"
+                    ],
+                    "note": "Additional regulatory compliance required"
+                })
         
         # Combine all requirements
         return {
             **common_requirements,
-            **type_specific,
-            "partner_type": partner_type
+            **entity_specific,
+            "entity_class": entity_class,
+            "service_provider_type": service_provider_type
         }
     
     async def get_verification_status(self, application_id: UUID) -> Dict:
@@ -211,17 +211,18 @@ class PartnerTools:
             "risk_category": None
         }
     
-    def get_document_checklist(self, partner_type: str) -> List[Dict]:
+    def get_document_checklist(self, entity_class: str, service_provider_type: Optional[str] = None) -> List[Dict]:
         """
-        Get document checklist for partner type.
+        Get document checklist based on entity classification (CDPS).
         
         Args:
-            partner_type: Partner type
+            entity_class: "business_entity" or "service_provider"
+            service_provider_type: For service providers: broker, transporter, etc.
         
         Returns:
             List of required documents with details
         """
-        # Common documents for all
+        # Common documents for ALL partners
         documents = [
             {
                 "type": DocumentType.GST_CERTIFICATE.value,
@@ -250,38 +251,52 @@ class PartnerTools:
             }
         ]
         
-        # Add partner-type specific documents
-        if partner_type == PartnerType.TRANSPORTER.value:
-            documents.extend([
-                {
-                    "type": DocumentType.VEHICLE_RC.value,
-                    "name": "Vehicle RC Book",
-                    "mandatory": False,
-                    "format": "PDF or Image",
-                    "max_size": "5 MB",
-                    "ocr_enabled": True,
-                    "note": "Required for each vehicle"
-                },
-                {
-                    "type": DocumentType.INSURANCE.value,
-                    "name": "Vehicle Insurance",
+        # Add entity-specific documents for service providers
+        if entity_class == "service_provider":
+            if service_provider_type == ServiceProviderType.TRANSPORTER.value:
+                documents.extend([
+                    {
+                        "type": DocumentType.VEHICLE_RC.value,
+                        "name": "Vehicle RC Book",
+                        "mandatory": False,
+                        "format": "PDF or Image",
+                        "max_size": "5 MB",
+                        "ocr_enabled": True,
+                        "note": "Required for each vehicle"
+                    },
+                    {
+                        "type": DocumentType.INSURANCE.value,
+                        "name": "Vehicle Insurance",
+                        "mandatory": False,
+                        "format": "PDF or Image",
+                        "max_size": "5 MB",
+                        "ocr_enabled": False,
+                        "note": "Valid insurance certificate"
+                    }
+                ])
+            
+            elif service_provider_type == ServiceProviderType.FINANCER.value:
+                documents.append({
+                    "type": "nbfc_license",
+                    "name": "NBFC License / RBI Registration",
                     "mandatory": False,
                     "format": "PDF or Image",
                     "max_size": "5 MB",
                     "ocr_enabled": False,
-                    "note": "Valid insurance certificate"
-                }
-            ])
+                    "note": "If applicable for financial institutions"
+                })
         
-        if partner_type in [PartnerType.IMPORTER.value, PartnerType.EXPORTER.value]:
-            documents.append({
-                "type": DocumentType.IEC.value,
-                "name": "Import Export Code Certificate",
-                "mandatory": True,
-                "format": "PDF or Image",
-                "max_size": "5 MB",
-                "ocr_enabled": True
-            })
+        # For business entities that want import/export
+        # (IEC will auto-grant import/export capabilities)
+        documents.append({
+            "type": DocumentType.IEC.value,
+            "name": "Import Export Code Certificate",
+            "mandatory": False,
+            "format": "PDF or Image",
+            "max_size": "5 MB",
+            "ocr_enabled": True,
+            "note": "Optional - required only if you want to import/export"
+        })
         
         return documents
     

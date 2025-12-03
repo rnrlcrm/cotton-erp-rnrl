@@ -7,28 +7,6 @@ All partner type enumerations for type safety
 from enum import Enum
 
 
-# DEPRECATED: PartnerType enum - Use entity_class + business_entity_type/service_provider_type instead
-# Kept for migration reference only - DO NOT USE in new code
-class PartnerType(str, Enum):
-    """
-    DEPRECATED: Main partner classification
-    
-    This enum is deprecated and will be removed after migration.
-    Use entity_class + capabilities instead.
-    """
-    SELLER = "seller"
-    BUYER = "buyer"
-    TRADER = "trader"
-    BROKER = "broker"
-    SUB_BROKER = "sub_broker"
-    TRANSPORTER = "transporter"
-    CONTROLLER = "controller"
-    FINANCER = "financer"
-    SHIPPING_AGENT = "shipping_agent"
-    IMPORTER = "importer"
-    EXPORTER = "exporter"
-
-
 class ServiceProviderType(str, Enum):
     """Service provider sub-types"""
     BROKER = "broker"
@@ -43,20 +21,6 @@ class TransporterType(str, Enum):
     """Transporter sub-types"""
     LORRY_OWNER = "lorry_owner"  # Has own vehicles - needs RC, Insurance, Fitness
     COMMISSION_AGENT = "commission_agent"  # Arranges transport - NO vehicle docs needed
-
-
-# DEPRECATED: TradeClassification enum - Replaced by capabilities JSONB
-# Kept temporarily for backward compatibility - will be removed after migration
-class TradeClassification(str, Enum):
-    """
-    DEPRECATED: For import/export classification
-    
-    This enum is deprecated and will be removed after migration.
-    Use capabilities instead.
-    """
-    DOMESTIC = "domestic"
-    EXPORTER = "exporter"  # Foreign entity selling TO India
-    IMPORTER = "importer"  # Foreign entity buying FROM India
 
 
 class PartnerStatus(str, Enum):

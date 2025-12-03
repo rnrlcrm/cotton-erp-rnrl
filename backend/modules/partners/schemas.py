@@ -19,21 +19,14 @@ from backend.modules.partners.enums import (
     KYCStatus,
     LocationType,
     PartnerStatus,
-    PartnerType,
     RiskCategory,
     ServiceProviderType,
-    TradeClassification,
 )
 
 
 # ============================================
 # ONBOARDING SCHEMAS
 # ============================================
-
-class OnboardingStart(BaseModel):
-    """Start onboarding - just partner type and country"""
-    partner_type: PartnerType
-    country: str = Field(..., min_length=2, max_length=100)
 
 
 class DocumentUpload(BaseModel):
@@ -46,8 +39,8 @@ class DocumentUpload(BaseModel):
 
 
 class PartnerFilters(BaseModel):
-    """Advanced filters for partner listing"""
-    partner_type: Optional[PartnerType] = None
+    \"\"\"Advanced filters for partner listing\"\"\"
+    entity_class: Optional[str] = None
     status: Optional[PartnerStatus] = None
     kyc_status: Optional[KYCStatus] = None
     kyc_expiring_days: Optional[int] = None  # Expiring in next N days
@@ -160,15 +153,14 @@ class BrokerData(BaseModel):
 
 class OnboardingApplicationCreate(BaseModel):
     """Complete onboarding application"""
-    partner_type: PartnerType
+    entity_class: str = Field(..., pattern="^(business_entity|service_provider)$")
     service_provider_type: Optional[ServiceProviderType] = None
-    trade_classification: Optional[TradeClassification] = None
+    business_entity_type: Optional[BusinessEntityType] = None
     
     # Business details (auto-filled from GST or manual)
     legal_name: str
     trade_name: Optional[str] = None
     country: str
-    business_entity_type: Optional[BusinessEntityType] = None
     registration_date: Optional[date] = None
     
     # Tax
@@ -252,7 +244,7 @@ class RiskAssessment(BaseModel):
 class OnboardingApplicationResponse(BaseModel):
     """Onboarding application status response"""
     id: UUID
-    partner_type: PartnerType
+    entity_class: str
     legal_name: str
     country: str
     status: str
@@ -358,14 +350,14 @@ class BusinessPartnerResponse(BaseModel):
     """Complete partner response"""
     id: UUID
     partner_code: Optional[str] = None
-    partner_type: PartnerType
+    entity_class: str
     service_provider_type: Optional[ServiceProviderType] = None
-    trade_classification: Optional[TradeClassification] = None
+    business_entity_type: Optional[BusinessEntityType] = None
+    capabilities: Optional[Dict[str, Any]] = None
     
     legal_name: str
     trade_name: Optional[str] = None
     country: str
-    business_entity_type: Optional[BusinessEntityType] = None
     registration_date: Optional[date] = None
     
     has_tax_registration: bool
@@ -445,7 +437,7 @@ class BusinessPartnerListResponse(BaseModel):
     """List response"""
     id: UUID
     partner_code: Optional[str] = None
-    partner_type: PartnerType
+    entity_class: str
     legal_name: str
     country: str
     status: PartnerStatus
