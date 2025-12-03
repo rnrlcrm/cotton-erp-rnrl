@@ -568,6 +568,173 @@ class CommodityAIHelper:
             "min_order_quantity": {"value": 10, "unit": "GRAMS"},
             "delivery_tolerance_pct": 0.0,
             "weight_tolerance_pct": 0.1
+        },
+        "Rice": {
+            "default_currency": "USD",
+            "supported_currencies": ["USD", "INR", "THB", "VND", "PKR"],
+            "international_pricing_unit": "USD_PER_MT",
+            "hs_code_6digit": "100630",
+            "country_tax_codes": {
+                "IND": {"hsn": "1006", "gst": 0},
+                "USA": {"hts": "100630", "duty": 0},
+                "EU": {"taric": "1006300000", "vat": 0},
+                "CHN": {"hs": "100630", "vat": 9.0}
+            },
+            "quality_standards": ["Codex_Alimentarius", "ISO_6646", "USDA"],
+            "international_grades": {
+                "Type": ["Basmati", "Jasmine", "Long Grain", "Medium Grain", "Short Grain"],
+                "Indian": ["1121 Basmati", "Pusa Basmati", "Sona Masuri", "IR64"],
+                "Thai": ["Thai Jasmine", "Thai Parboiled", "Thai White"]
+            },
+            "certification_required": {"organic": False, "food_safe": True, "export_quality": True},
+            "major_producing_countries": ["China", "India", "Indonesia", "Bangladesh", "Vietnam", "Thailand"],
+            "major_consuming_countries": ["China", "India", "Indonesia", "Bangladesh", "Philippines"],
+            "trading_hubs": ["Bangkok", "Mumbai", "Ho Chi Minh City", "Houston"],
+            "traded_on_exchanges": ["NCDEX", "DCE", "CBOT"],
+            "contract_specifications": {
+                "NCDEX": {"lot_size": "10 MT", "variety": "Basmati"},
+                "DCE": {"lot_size": "10 MT", "type": "Long Grain"}
+            },
+            "price_volatility": "MEDIUM",
+            "export_regulations": {"license_required": True, "restricted_countries": [], "min_export_price": True},
+            "import_regulations": {"license_required": False, "quota": True},
+            "phytosanitary_required": True,
+            "fumigation_required": False,
+            "seasonal_commodity": True,
+            "harvest_season": {
+                "India": ["Oct", "Nov", "Dec", "Jan", "Feb"],
+                "Thailand": ["Nov", "Dec", "Jan"],
+                "Vietnam": ["May", "Jun", "Jul"]
+            },
+            "shelf_life_days": 545,
+            "storage_conditions": {"temperature": "10-15°C", "humidity": "<15%", "pest_control": "Required"},
+            "standard_lot_size": {"domestic": {"value": 10, "unit": "MT"}, "international": {"value": 25, "unit": "MT"}},
+            "min_order_quantity": {"value": 5, "unit": "MT"},
+            "delivery_tolerance_pct": 2.0,
+            "weight_tolerance_pct": 1.0
+        },
+        "Silver": {
+            "default_currency": "USD",
+            "supported_currencies": ["USD", "INR", "EUR", "GBP", "CHF"],
+            "international_pricing_unit": "USD_PER_TROY_OUNCE",
+            "hs_code_6digit": "710691",
+            "country_tax_codes": {
+                "IND": {"hsn": "7106", "gst": 3.0},
+                "USA": {"hts": "710691", "duty": 0},
+                "EU": {"taric": "7106910000", "vat": 0},
+                "CHN": {"hs": "710691", "vat": 13.0}
+            },
+            "quality_standards": ["LBMA", "ISO_9001", "BIS_Hallmark"],
+            "international_grades": {
+                "Purity": ["999 (Fine)", "925 (Sterling)", "800", "500"],
+                "LBMA": ["Good Delivery Bar (1000 oz)", "Kilo Bar"]
+            },
+            "certification_required": {"lbma_approved": True, "assay_certificate": True},
+            "major_producing_countries": ["Mexico", "China", "Peru", "Russia", "Australia"],
+            "major_consuming_countries": ["India", "China", "USA", "Europe", "Japan"],
+            "trading_hubs": ["London", "New York", "Zurich", "Dubai", "Mumbai"],
+            "traded_on_exchanges": ["COMEX", "LBMA", "MCX", "TOCOM", "SGE"],
+            "contract_specifications": {
+                "COMEX": {"lot_size": "5000 troy oz", "purity": "0.999"},
+                "MCX": {"lot_size": "30 kg", "purity": "0.999"}
+            },
+            "price_volatility": "HIGH",
+            "export_regulations": {"license_required": True, "customs_declaration": True},
+            "import_regulations": {"license_required": True, "quota": False, "duty": "Varies"},
+            "phytosanitary_required": False,
+            "fumigation_required": False,
+            "seasonal_commodity": False,
+            "harvest_season": {},
+            "shelf_life_days": None,
+            "storage_conditions": {"security": "High", "insurance": "Required", "vault_storage": True, "tarnish_protection": True},
+            "standard_lot_size": {"domestic": {"value": 1, "unit": "KG"}, "international": {"value": 1000, "unit": "TROY_OZ"}},
+            "min_order_quantity": {"value": 100, "unit": "GRAMS"},
+            "delivery_tolerance_pct": 0.0,
+            "weight_tolerance_pct": 0.1
+        },
+        "Copper": {
+            "default_currency": "USD",
+            "supported_currencies": ["USD", "EUR", "GBP", "CNY"],
+            "international_pricing_unit": "USD_PER_MT",
+            "hs_code_6digit": "740311",
+            "country_tax_codes": {
+                "IND": {"hsn": "7403", "gst": 18.0},
+                "USA": {"hts": "740311", "duty": 0},
+                "EU": {"taric": "7403110000", "vat": 19.0},
+                "CHN": {"hs": "740311", "vat": 13.0}
+            },
+            "quality_standards": ["LME", "ISO_9001", "ASTM_B115"],
+            "international_grades": {
+                "Grade": ["Grade A (99.99%)", "Grade B (99.95%)", "Electrolytic Copper"],
+                "LME": ["LME Grade A", "Cathode Copper"]
+            },
+            "certification_required": {"lme_approved": True, "quality_certificate": True},
+            "major_producing_countries": ["Chile", "Peru", "China", "USA", "Australia", "Zambia"],
+            "major_consuming_countries": ["China", "USA", "Japan", "Germany", "India"],
+            "trading_hubs": ["London", "Shanghai", "New York", "Santiago"],
+            "traded_on_exchanges": ["LME", "SHFE", "COMEX", "MCX"],
+            "contract_specifications": {
+                "LME": {"lot_size": "25 MT", "purity": "99.99%"},
+                "COMEX": {"lot_size": "25000 lbs", "grade": "Grade A"},
+                "MCX": {"lot_size": "1 MT", "purity": "99.95%"}
+            },
+            "price_volatility": "HIGH",
+            "export_regulations": {"license_required": False, "restricted_countries": []},
+            "import_regulations": {"license_required": False, "quota": False, "duty": "Varies"},
+            "phytosanitary_required": False,
+            "fumigation_required": False,
+            "seasonal_commodity": False,
+            "harvest_season": {},
+            "shelf_life_days": None,
+            "storage_conditions": {"humidity": "<60%", "ventilation": "Required", "corrosion_protection": True},
+            "standard_lot_size": {"domestic": {"value": 1, "unit": "MT"}, "international": {"value": 25, "unit": "MT"}},
+            "min_order_quantity": {"value": 100, "unit": "KG"},
+            "delivery_tolerance_pct": 2.0,
+            "weight_tolerance_pct": 1.0
+        },
+        "Soybean Oil": {
+            "default_currency": "USD",
+            "supported_currencies": ["USD", "INR", "BRL", "ARS"],
+            "international_pricing_unit": "USD_PER_MT",
+            "hs_code_6digit": "150710",
+            "country_tax_codes": {
+                "IND": {"hsn": "1507", "gst": 5.0},
+                "USA": {"hts": "150710", "duty": 0},
+                "EU": {"taric": "1507100000", "vat": 7.0},
+                "CHN": {"hs": "150710", "vat": 9.0}
+            },
+            "quality_standards": ["Codex_Alimentarius", "ISO_6885", "FSSAI"],
+            "international_grades": {
+                "Type": ["Crude", "Refined", "Bleached", "Deodorized"],
+                "Quality": ["Edible Grade", "Industrial Grade"]
+            },
+            "certification_required": {"food_safe": True, "organic": False, "non_gmo": True},
+            "major_producing_countries": ["USA", "Brazil", "Argentina", "China", "India"],
+            "major_consuming_countries": ["China", "USA", "India", "Brazil", "EU"],
+            "trading_hubs": ["Chicago", "Dalian", "Mumbai", "Buenos Aires"],
+            "traded_on_exchanges": ["CBOT", "DCE", "NCDEX", "MATIF"],
+            "contract_specifications": {
+                "CBOT": {"lot_size": "60000 lbs", "type": "Crude"},
+                "DCE": {"lot_size": "10 MT", "type": "Refined"},
+                "NCDEX": {"lot_size": "10 MT", "type": "Refined"}
+            },
+            "price_volatility": "MEDIUM",
+            "export_regulations": {"license_required": False, "restricted_countries": []},
+            "import_regulations": {"license_required": False, "quota": False},
+            "phytosanitary_required": False,
+            "fumigation_required": False,
+            "seasonal_commodity": True,
+            "harvest_season": {
+                "USA": ["Sep", "Oct", "Nov"],
+                "Brazil": ["Feb", "Mar", "Apr", "May"],
+                "Argentina": ["Apr", "May", "Jun"]
+            },
+            "shelf_life_days": 365,
+            "storage_conditions": {"temperature": "15-25°C", "light_protection": True, "oxidation_prevention": True},
+            "standard_lot_size": {"domestic": {"value": 10, "unit": "MT"}, "international": {"value": 20, "unit": "MT"}},
+            "min_order_quantity": {"value": 1, "unit": "MT"},
+            "delivery_tolerance_pct": 3.0,
+            "weight_tolerance_pct": 2.0
         }
     }
     
