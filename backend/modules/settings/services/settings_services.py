@@ -27,6 +27,14 @@ from backend.modules.settings.repositories.settings_repositories import (
 
 pwd_context = CryptContext(schemes=["pbkdf2_sha256"], deprecated="auto")
 
+# Error message constants
+ERR_INVALID_CREDENTIALS = "Invalid credentials"
+ERR_INVALID_REFRESH_TOKEN = "Invalid refresh token"
+ERR_SUB_USER_NOT_FOUND = "Sub-user not found"
+ERR_MALFORMED_TOKEN = "Malformed token"
+ERR_USER_ALREADY_EXISTS = "User already exists"
+ERR_ACCOUNT_INACTIVE = "User account is inactive"
+
 
 class RBACService:
 	def __init__(self, db: AsyncSession, redis_client: Optional[redis.Redis] = None) -> None:
@@ -86,7 +94,7 @@ class AuthService:
 
 	async def signup(self, email: str, password: str, full_name: Optional[str] = None) -> User:
 		if await self.user_repo.get_by_email(email):
-			raise ValueError("User already exists")
+			raise ValueError(ERR_USER_ALREADY_EXISTS)
 		# Use configurable organization name for multi-commodity support
 		org_name = settings.DEFAULT_ORGANIZATION_NAME
 		org = await self.org_repo.get_by_name(org_name) or await self.org_repo.create(org_name)
@@ -108,9 +116,9 @@ class AuthService:
 			raise ValueError("EXTERNAL users must login via mobile OTP")
 		
 		if not user.is_active:
-			raise ValueError("User account is inactive")
+			raise ValueError(ERR_ACCOUNT_INACTIVE)
 		if not self.hasher.verify(password, user.password_hash):
-			raise ValueError("Invalid credentials")
+			raise ValueError(ERR_INVALID_CREDENTIALS)
 		access_minutes = settings.ACCESS_TOKEN_EXPIRES_MINUTES
 		refresh_days = settings.REFRESH_TOKEN_EXPIRES_DAYS
 		access = create_token(str(user.id), str(user.organization_id), minutes=access_minutes, token_type="access")
@@ -132,13 +140,13 @@ class AuthService:
 		try:
 			payload = decode_token(refresh_token_str)
 		except Exception:
-			raise ValueError("Invalid refresh token")
+			raise ValueError(ERR_INVALID_REFRESH_TOKEN)
 		if payload.get("type") != "refresh":
-			raise ValueError("Invalid refresh token")
+			raise ValueError(ERR_INVALID_REFRESH_TOKEN)
 		jti = payload.get("jti")
 		user_id = payload.get("sub")
 		if not jti or not user_id:
-			raise ValueError("Malformed token")
+			raise ValueError(ERR_MALFORMED_TOKEN)
 		result = await self.db.execute(select(RefreshToken).where(RefreshToken.jti == jti))
 		token_row = result.scalar_one_or_none()
 		if token_row is None or token_row.revoked:
@@ -167,12 +175,12 @@ class AuthService:
 		try:
 			payload = decode_token(refresh_token_str)
 		except Exception:
-			raise ValueError("Invalid refresh token")
+			raise ValueError(ERR_INVALID_REFRESH_TOKEN)
 		if payload.get("type") != "refresh":
-			raise ValueError("Invalid refresh token")
+			raise ValueError(ERR_INVALID_REFRESH_TOKEN)
 		jti = payload.get("jti")
 		if not jti:
-			raise ValueError("Malformed token")
+			raise ValueError(ERR_MALFORMED_TOKEN)
 		result = await self.db.execute(select(RefreshToken).where(RefreshToken.jti == jti))
 		token_row = result.scalar_one_or_none()
 		if token_row and not token_row.revoked:
@@ -281,7 +289,7 @@ class AuthService:
 		
 		sub_user = await self.user_repo.get_by_id(UUID(sub_user_id))
 		if not sub_user:
-			raise ValueError("Sub-user not found")
+			raise ValueError(ERR_SUB_USER_NOT_FOUND)
 		
 		if str(sub_user.parent_user_id) != parent_user_id:
 			raise ValueError("You can only delete your own sub-users")
@@ -307,7 +315,7 @@ class AuthService:
 		
 		sub_user = await self.user_repo.get_by_id(UUID(sub_user_id))
 		if not sub_user:
-			raise ValueError("Sub-user not found")
+			raise ValueError(ERR_SUB_USER_NOT_FOUND)
 		
 		if str(sub_user.parent_user_id) != parent_user_id:
 			raise ValueError("You can only disable your own sub-users")
@@ -333,7 +341,7 @@ class AuthService:
 		
 		sub_user = await self.user_repo.get_by_id(UUID(sub_user_id))
 		if not sub_user:
-			raise ValueError("Sub-user not found")
+			raise ValueError(ERR_SUB_USER_NOT_FOUND)
 		
 		if str(sub_user.parent_user_id) != parent_user_id:
 			raise ValueError("You can only enable your own sub-users")
@@ -372,7 +380,7 @@ class AuthService:
 		"""Verify 2FA PIN and issue tokens."""
 		user = await self.user_repo.get_by_email(email)
 		if not user:
-			raise ValueError("Invalid credentials")
+			raise ValueError(ERR_INVALID_CREDENTIALS)
 		
 		if not user.two_fa_enabled or not user.pin_hash:
 			raise ValueError("2FA not enabled for this user")
@@ -418,7 +426,7 @@ class AuthService:
 		user = await self.user_repo.get_by_email(email)
 		if not user:
 			await lockout_service.record_failed_attempt(email)
-			raise ValueError("Invalid credentials")
+			raise ValueError(ERR_INVALID_CREDENTIALS)
 		
 		# Check user type
 		if user.user_type not in ['INTERNAL', 'SUPER_ADMIN']:
