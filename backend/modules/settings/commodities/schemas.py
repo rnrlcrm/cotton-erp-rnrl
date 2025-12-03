@@ -51,11 +51,55 @@ class CommodityBase(BaseModel):
         description="Custom weight for BALE/BAG (uses catalog default if null)"
     )
     
+    # ==================== INTERNATIONAL FIELDS ====================
+    
+    # Multi-Currency Pricing
+    default_currency: str = Field(default="USD", max_length=3)
+    supported_currencies: Optional[List[str]] = None
+    international_pricing_unit: Optional[str] = Field(None, max_length=50)
+    
+    # International Tax & Compliance
+    hs_code_6digit: Optional[str] = Field(None, max_length=6)
+    country_tax_codes: Optional[Dict] = None
+    
+    # Quality Standards
+    quality_standards: Optional[List[str]] = None
+    international_grades: Optional[Dict] = None
+    certification_required: Optional[Dict] = None
+    
+    # Geography & Trading
+    major_producing_countries: Optional[List[str]] = None
+    major_consuming_countries: Optional[List[str]] = None
+    trading_hubs: Optional[List[str]] = None
+    
+    # Exchange & Market
+    traded_on_exchanges: Optional[List[str]] = None
+    contract_specifications: Optional[Dict] = None
+    price_volatility: Optional[str] = Field(None, max_length=20)
+    
+    # Import/Export
+    export_regulations: Optional[Dict] = None
+    import_regulations: Optional[Dict] = None
+    phytosanitary_required: bool = False
+    fumigation_required: bool = False
+    
+    # Seasonal & Storage
+    seasonal_commodity: bool = False
+    harvest_season: Optional[Dict] = None
+    shelf_life_days: Optional[int] = None
+    storage_conditions: Optional[Dict] = None
+    
+    # Contract Terms
+    standard_lot_size: Optional[Dict] = None
+    min_order_quantity: Optional[Dict] = None
+    delivery_tolerance_pct: Optional[Decimal] = Field(None, ge=0, le=100)
+    weight_tolerance_pct: Optional[Decimal] = Field(None, ge=0, le=100)
+    
     is_active: bool = True
 
 
 class CommodityCreate(CommodityBase):
-    """Create commodity schema"""
+    """Create commodity schema - inherits all international fields"""
     pass
 
 
@@ -75,6 +119,34 @@ class CommodityUpdate(BaseModel):
     trade_unit: Optional[str] = Field(None, max_length=50)
     rate_unit: Optional[str] = Field(None, max_length=50)
     standard_weight_per_unit: Optional[Decimal] = Field(None, ge=0)
+    
+    # INTERNATIONAL FIELDS (all optional for update)
+    default_currency: Optional[str] = Field(None, max_length=3)
+    supported_currencies: Optional[List[str]] = None
+    international_pricing_unit: Optional[str] = Field(None, max_length=50)
+    hs_code_6digit: Optional[str] = Field(None, max_length=6)
+    country_tax_codes: Optional[Dict] = None
+    quality_standards: Optional[List[str]] = None
+    international_grades: Optional[Dict] = None
+    certification_required: Optional[Dict] = None
+    major_producing_countries: Optional[List[str]] = None
+    major_consuming_countries: Optional[List[str]] = None
+    trading_hubs: Optional[List[str]] = None
+    traded_on_exchanges: Optional[List[str]] = None
+    contract_specifications: Optional[Dict] = None
+    price_volatility: Optional[str] = Field(None, max_length=20)
+    export_regulations: Optional[Dict] = None
+    import_regulations: Optional[Dict] = None
+    phytosanitary_required: Optional[bool] = None
+    fumigation_required: Optional[bool] = None
+    seasonal_commodity: Optional[bool] = None
+    harvest_season: Optional[Dict] = None
+    shelf_life_days: Optional[int] = None
+    storage_conditions: Optional[Dict] = None
+    standard_lot_size: Optional[Dict] = None
+    min_order_quantity: Optional[Dict] = None
+    delivery_tolerance_pct: Optional[Decimal] = Field(None, ge=0, le=100)
+    weight_tolerance_pct: Optional[Decimal] = Field(None, ge=0, le=100)
     
     is_active: Optional[bool] = None
 
@@ -481,6 +553,13 @@ class ParameterSuggestion(BaseModel):
     typical_range: Optional[List[Decimal]]
     mandatory: bool = False
     description: Optional[str] = None
+
+
+class InternationalFieldsSuggestion(BaseModel):
+    """AI-powered international fields suggestion"""
+    confidence: float = Field(..., ge=0, le=1, description="AI confidence in suggestions")
+    template_used: str = Field(..., description="Template used (Cotton, Wheat, Gold, DEFAULT)")
+    international_fields: Dict = Field(..., description="Complete international field values")
 
 
 class BulkUploadResult(BaseModel):
