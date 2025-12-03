@@ -339,8 +339,9 @@ async def reserve_quantity(
     try:
         availability = await service.reserve_availability(
             availability_id=availability_id,
-            reserve_quantity=request.quantity,
+            quantity=request.quantity,
             buyer_id=request.buyer_id,
+            reservation_hours=request.reservation_hours,
             reserved_by=current_user.id
         )
         
