@@ -116,9 +116,9 @@ class TestCommodityAIHelper:
         
         # Should fall back to hardcoded standards
         result = await helper.suggest_quality_parameters(
-            commodity_id=uuid4(),
-            category="Natural Fiber",
-            name="Cotton"
+            uuid4(),  # commodity_id (unused, reserved for future)
+            "Natural Fiber",
+            "Cotton"
         )
         
         assert isinstance(result, list)

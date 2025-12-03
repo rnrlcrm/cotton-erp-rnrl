@@ -66,7 +66,7 @@ class CommodityAIHelper:
     
     # Category detection patterns (Multi-commodity support)
     CATEGORY_PATTERNS = {
-        CATEGORY_NATURAL_FIBER: ["cotton", "jute", "silk", "wool", "linen"],
+        "Natural Fiber": ["cotton", "jute", "silk", "wool", "linen"],
         "Synthetic Fiber": ["polyester", "nylon", "acrylic", "spandex"],
         "Blended Fiber": ["poly cotton", "cotton blend", "mixed fiber"],
         "Waste": ["waste", "scrap", "residue"],
@@ -84,7 +84,7 @@ class CommodityAIHelper:
     
     # Standard parameters by category
     STANDARD_PARAMETERS = {
-        f"{CATEGORY_NATURAL_FIBER} - Cotton": [
+        "Natural Fiber - Cotton": [
             {
                 "name": "Staple Length",
                 "type": "NUMERIC",
@@ -216,7 +216,7 @@ class CommodityAIHelper:
         
         # Default fallback
         return CategorySuggestion(
-            category=CATEGORY_NATURAL_FIBER,
+            category=self.CATEGORY_NATURAL_FIBER,
             confidence=0.50,
             subcategory=None
         )
@@ -329,8 +329,8 @@ class CommodityAIHelper:
         category_key = category
         
         # Refine for specific sub-categories
-        if "cotton" in name.lower() and CATEGORY_NATURAL_FIBER in category:
-            category_key = f"{CATEGORY_NATURAL_FIBER} - Cotton"
+        if "cotton" in name.lower() and self.CATEGORY_NATURAL_FIBER in category:
+            category_key = f"{self.CATEGORY_NATURAL_FIBER} - Cotton"
         elif "yarn" in name.lower():
             category_key = "Yarn"
         elif "fabric" in name.lower() or "cloth" in name.lower():

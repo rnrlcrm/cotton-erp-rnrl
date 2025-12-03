@@ -236,7 +236,7 @@ def suggest_hsn(
 
 
 @router.post("/{commodity_id}/ai/suggest-parameters", response_model=List[ParameterSuggestion])
-def suggest_parameters(
+async def suggest_parameters(
     commodity_id: UUID,
     category: str,
     name: str,
@@ -245,7 +245,7 @@ def suggest_parameters(
     _check: None = Depends(RequireCapability(Capabilities.COMMODITY_MANAGE_SPECIFICATIONS))
 ):
     """AI: Suggest quality parameters for commodity. Requires COMMODITY_MANAGE_SPECIFICATIONS capability. Supports idempotency."""
-    suggestions = ai_helper.suggest_quality_parameters(commodity_id, category, name)
+    suggestions = await ai_helper.suggest_quality_parameters(commodity_id, category, name)
     return suggestions
 
 
