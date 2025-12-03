@@ -1270,3 +1270,445 @@ class RiskEngine:
                 "reason": f"{partner_type.title()} role has flexible trading permissions",
                 "partner_type": partner_type
             }
+    
+    # ============================================================================
+    # NATIONAL COMPLIANCE CHECKS (India Domestic)
+    # ============================================================================
+    
+    async def check_gst_registration(
+        self,
+        partner_id: UUID,
+        transaction_type: str,
+        buyer_state: str,
+        seller_state: str
+    ) -> Dict[str, Any]:
+        """
+        Check if partner has valid GST certificate using PartnerDocument system.
+        
+        Args:
+            partner_id: Partner ID
+            transaction_type: "BUY" or "SELL"
+            buyer_state: Buyer's state code (e.g., "MH", "GJ")
+            seller_state: Seller's state code
+            
+        Returns:
+            {
+                "blocked": bool,
+                "reason": str,
+                "violation_type": str (if blocked),
+                "gstin": str (if found),
+                "document_id": str (if found)
+            }
+        
+        Data Source:
+        - PartnerDocument with document_type='gst_certificate'
+        - OCR extracted data (GSTIN, registration date, state)
+        """
+        from backend.modules.partners.models import PartnerDocument
+        
+        # Query PartnerDocument for GST certificate
+        result = await self.db.execute(
+            select(PartnerDocument).where(
+                and_(
+                    PartnerDocument.partner_id == partner_id,
+                    PartnerDocument.document_type == "gst_certificate",
+                    PartnerDocument.verified == True,  # KYC approved
+                    PartnerDocument.is_expired == False
+                )
+            )
+        )
+        gst_certificate = result.scalar_one_or_none()
+        
+        # CHECK 1: GST certificate exists
+        if not gst_certificate:
+            return {
+                "blocked": True,
+                "reason": "GST registration required for domestic trade but partner doesn't have verified GST certificate",
+                "violation_type": "GST_MISSING",
+                "how_to_fix": "Upload GST certificate in Documents section and get it verified"
+            }
+        
+        # CHECK 2: Extract GSTIN from OCR data
+        ocr_data = gst_certificate.ocr_extracted_data or {}
+        gstin = ocr_data.get("gstin") or ocr_data.get("gst_number")
+        
+        if not gstin:
+            return {
+                "blocked": True,
+                "reason": "GST certificate uploaded but GSTIN not extracted from OCR",
+                "violation_type": "GST_INCOMPLETE",
+                "document_id": str(gst_certificate.id),
+                "how_to_fix": "Re-upload clear GST certificate for OCR extraction"
+            }
+        
+        # CHECK 3: Verify state matches transaction (warning only)
+        gst_state = ocr_data.get("state_code") or gstin[:2]  # First 2 digits of GSTIN
+        
+        if transaction_type == "SELL" and gst_state != seller_state[:2]:
+            return {
+                "blocked": False,
+                "warning": True,
+                "reason": f"GST state code {gst_state} doesn't match seller state {seller_state}",
+                "violation_type": "GST_STATE_MISMATCH",
+                "gstin": gstin,
+                "document_id": str(gst_certificate.id)
+            }
+        
+        return {
+            "blocked": False,
+            "gstin": gstin,
+            "document_id": str(gst_certificate.id),
+            "state_code": gst_state
+        }
+    
+    async def check_pan_card(
+        self,
+        partner_id: UUID
+    ) -> Dict[str, Any]:
+        """
+        Check if partner has valid PAN card using PartnerDocument system.
+        
+        Args:
+            partner_id: Partner ID
+            
+        Returns:
+            {
+                "blocked": bool,
+                "reason": str,
+                "pan_number": str (if found),
+                "document_id": str (if found)
+            }
+        
+        Data Source:
+        - PartnerDocument with document_type='pan_card'
+        - OCR extracted PAN number
+        """
+        from backend.modules.partners.models import PartnerDocument
+        
+        # Query PartnerDocument for PAN card
+        result = await self.db.execute(
+            select(PartnerDocument).where(
+                and_(
+                    PartnerDocument.partner_id == partner_id,
+                    PartnerDocument.document_type == "pan_card",
+                    PartnerDocument.verified == True
+                )
+            )
+        )
+        pan_document = result.scalar_one_or_none()
+        
+        # CHECK 1: PAN card exists
+        if not pan_document:
+            return {
+                "blocked": True,
+                "reason": "PAN card required for trading but partner doesn't have verified PAN card",
+                "violation_type": "PAN_MISSING",
+                "how_to_fix": "Upload PAN card in Documents section and get it verified"
+            }
+        
+        # CHECK 2: Extract PAN number from OCR
+        ocr_data = pan_document.ocr_extracted_data or {}
+        pan_number = ocr_data.get("pan_number")
+        
+        if not pan_number:
+            return {
+                "blocked": True,
+                "reason": "PAN card uploaded but PAN number not extracted from OCR",
+                "violation_type": "PAN_INCOMPLETE",
+                "document_id": str(pan_document.id),
+                "how_to_fix": "Re-upload clear PAN card for OCR extraction"
+            }
+        
+        # CHECK 3: Validate PAN format (10 chars: 5 letters + 4 digits + 1 letter)
+        import re
+        if not re.match(r'^[A-Z]{5}[0-9]{4}[A-Z]{1}$', pan_number):
+            return {
+                "blocked": True,
+                "reason": f"Invalid PAN format: {pan_number}",
+                "violation_type": "PAN_INVALID_FORMAT",
+                "document_id": str(pan_document.id),
+                "how_to_fix": "Verify PAN number is correct (format: AAAAA9999A)"
+            }
+        
+        return {
+            "blocked": False,
+            "pan_number": pan_number,
+            "document_id": str(pan_document.id)
+        }
+    
+    # ============================================================================
+    # INTERNATIONAL COMPLIANCE CHECKS (Cross-Border)
+    # ============================================================================
+    
+    async def check_sanctions_compliance(
+        self,
+        commodity_id: UUID,
+        buyer_country: str,
+        seller_country: str
+    ) -> Dict[str, Any]:
+        """
+        Check sanctions and country restrictions - RUN THIS FIRST for international trades!
+        
+        Args:
+            commodity_id: Commodity ID
+            buyer_country: Buyer's country code (ISO 2-letter)
+            seller_country: Seller's country code
+            
+        Returns:
+            {
+                "blocked": bool,
+                "reason": str,
+                "violation_type": str (if blocked)
+            }
+        
+        Data Sources:
+        - commodity.export_regulations.restricted_countries
+        - commodity.import_regulations.restricted_countries
+        - Global sanctions list (hardcoded)
+        """
+        from backend.modules.settings.commodities.models import Commodity
+        
+        # Get commodity
+        commodity = await self.db.get(Commodity, commodity_id)
+        
+        if not commodity:
+            return {"blocked": False, "reason": "Commodity not found"}
+        
+        # GLOBAL SANCTIONS LIST (Update periodically from OFAC, UN, EU)
+        SANCTIONED_COUNTRIES = [
+            "IR",  # Iran
+            "KP",  # North Korea
+            "SY",  # Syria
+            "CU",  # Cuba (partial sanctions)
+            # Add more as regulations change
+        ]
+        
+        # CHECK 1: Buyer country sanctioned
+        if buyer_country in SANCTIONED_COUNTRIES:
+            return {
+                "blocked": True,
+                "reason": f"Cannot trade with {buyer_country} - Country under international sanctions",
+                "violation_type": "SANCTIONED_COUNTRY",
+                "country": buyer_country,
+                "how_to_fix": "Cannot trade to sanctioned countries (OFAC/UN restrictions)"
+            }
+        
+        # CHECK 2: Seller country sanctioned
+        if seller_country in SANCTIONED_COUNTRIES:
+            return {
+                "blocked": True,
+                "reason": f"Cannot trade from {seller_country} - Country under international sanctions",
+                "violation_type": "SANCTIONED_ORIGIN",
+                "country": seller_country,
+                "how_to_fix": "Cannot trade from sanctioned countries (OFAC/UN restrictions)"
+            }
+        
+        # CHECK 3: Commodity-specific export restrictions
+        export_regs = commodity.export_regulations or {}
+        restricted_countries = export_regs.get("restricted_countries", [])
+        
+        if buyer_country in restricted_countries:
+            restriction_reason = export_regs.get("restriction_reason", "Trade restrictions apply")
+            
+            return {
+                "blocked": True,
+                "reason": (
+                    f"Export of {commodity.name} to {buyer_country} is RESTRICTED. "
+                    f"Reason: {restriction_reason}"
+                ),
+                "violation_type": "COMMODITY_EXPORT_RESTRICTED",
+                "commodity_name": commodity.name,
+                "restricted_country": buyer_country,
+                "restriction_reason": restriction_reason,
+                "how_to_fix": "Cannot trade this commodity to this destination (regulatory restriction)"
+            }
+        
+        # CHECK 4: Commodity-specific import restrictions
+        import_regs = commodity.import_regulations or {}
+        import_restricted = import_regs.get("restricted_countries", [])
+        
+        if seller_country in import_restricted:
+            return {
+                "blocked": True,
+                "reason": f"Import of {commodity.name} from {seller_country} is RESTRICTED",
+                "violation_type": "COMMODITY_IMPORT_RESTRICTED",
+                "commodity_name": commodity.name,
+                "restricted_origin": seller_country,
+                "how_to_fix": "Cannot import this commodity from this origin (regulatory restriction)"
+            }
+        
+        return {
+            "blocked": False,
+            "reason": "Sanctions compliance check passed"
+        }
+    
+    async def check_export_import_license(
+        self,
+        commodity_id: UUID,
+        seller_partner_id: UUID,
+        buyer_partner_id: UUID,
+        buyer_country: str,
+        seller_country: str,
+        transaction_value: Decimal
+    ) -> Dict[str, Any]:
+        """
+        Check export/import license using EXISTING PartnerDocument system.
+        
+        Args:
+            commodity_id: Commodity ID
+            seller_partner_id: Seller's partner ID
+            buyer_partner_id: Buyer's partner ID
+            buyer_country: Buyer's country code
+            seller_country: Seller's country code
+            transaction_value: Transaction amount
+            
+        Returns:
+            {
+                "blocked": bool,
+                "reason": str,
+                "seller_license_doc_id": str (if found),
+                "buyer_license_doc_id": str (if found)
+            }
+        
+        Data Sources:
+        - commodity.export_regulations (ALREADY EXISTS)
+        - PartnerDocument with document_type='iec' or 'foreign_export_license'
+        - PartnerDocument.ocr_extracted_data (license details)
+        """
+        from backend.modules.settings.commodities.models import Commodity
+        from backend.modules.partners.models import PartnerDocument
+        
+        # Get commodity
+        commodity = await self.db.get(Commodity, commodity_id)
+        
+        if not commodity:
+            return {"blocked": False, "reason": "Commodity not found"}
+        
+        # ========================================================================
+        # STEP 1: Check EXPORT regulations (seller side)
+        # ========================================================================
+        export_regs = commodity.export_regulations or {}
+        
+        if export_regs.get("license_required", False):
+            # Query seller's IEC/export license document
+            result = await self.db.execute(
+                select(PartnerDocument).where(
+                    and_(
+                        PartnerDocument.partner_id == seller_partner_id,
+                        PartnerDocument.document_type.in_(["iec", "foreign_export_license"]),
+                        PartnerDocument.verified == True,  # KYC approved only
+                        PartnerDocument.is_expired == False  # Not expired
+                    )
+                )
+            )
+            license_doc = result.scalar_one_or_none()
+            
+            # CHECK 1: Does seller have verified export license document?
+            if not license_doc:
+                return {
+                    "blocked": True,
+                    "reason": (
+                        f"Export license required for {commodity.name} but seller "
+                        f"does not have verified export license (IEC/DGFT) document"
+                    ),
+                    "violation_type": "EXPORT_LICENSE_MISSING",
+                    "required_license_types": export_regs.get("license_types", ["IEC"]),
+                    "commodity_name": commodity.name,
+                    "how_to_fix": "Upload IEC/DGFT certificate in Documents section and get it verified"
+                }
+            
+            # CHECK 2: Is license expired?
+            if license_doc.is_expired or (license_doc.expiry_date and license_doc.expiry_date < date.today()):
+                return {
+                    "blocked": True,
+                    "reason": f"Seller has expired export license. License expired on {license_doc.expiry_date}",
+                    "violation_type": "EXPORT_LICENSE_EXPIRED",
+                    "license_number": license_doc.ocr_extracted_data.get("license_number") if license_doc.ocr_extracted_data else "Unknown",
+                    "expiry_date": license_doc.expiry_date.isoformat() if license_doc.expiry_date else None,
+                    "document_id": str(license_doc.id),
+                    "how_to_fix": "Renew export license and upload new certificate"
+                }
+            
+            # Extract license details from OCR data
+            ocr_data = license_doc.ocr_extracted_data or {}
+            license_type = ocr_data.get("license_type", "IEC")
+            license_countries = ocr_data.get("license_countries", [])
+            
+            # CHECK 3: Is license type correct?
+            required_types = export_regs.get("license_types", [])
+            if required_types and license_type not in required_types:
+                return {
+                    "blocked": True,
+                    "reason": f"Commodity {commodity.name} requires {required_types} license, but seller has '{license_type}'",
+                    "violation_type": "WRONG_LICENSE_TYPE",
+                    "seller_license_type": license_type,
+                    "required_license_types": required_types,
+                    "how_to_fix": f"Obtain {required_types} license"
+                }
+            
+            # CHECK 4: Is destination country covered by license?
+            if license_countries:
+                if buyer_country not in license_countries and "ALL" not in license_countries:
+                    return {
+                        "blocked": True,
+                        "reason": f"Seller's export license does not cover {buyer_country}. License valid for: {', '.join(license_countries)}",
+                        "violation_type": "DESTINATION_NOT_COVERED",
+                        "destination_country": buyer_country,
+                        "licensed_countries": license_countries,
+                        "document_id": str(license_doc.id),
+                        "how_to_fix": f"Update license to include {buyer_country} or upload worldwide license"
+                    }
+            
+            # CHECK 5: Minimum export value exemption
+            min_value = export_regs.get("minimum_export_value")
+            if min_value and transaction_value < Decimal(str(min_value)):
+                return {
+                    "blocked": False,
+                    "reason": f"Export value below license threshold (${min_value})",
+                    "exemption": "SMALL_VALUE_EXEMPTION"
+                }
+        
+        # ========================================================================
+        # STEP 2: Check IMPORT regulations (buyer side)
+        # ========================================================================
+        import_regs = commodity.import_regulations or {}
+        
+        if import_regs.get("license_required", False):
+            # Query buyer's import license document
+            result = await self.db.execute(
+                select(PartnerDocument).where(
+                    and_(
+                        PartnerDocument.partner_id == buyer_partner_id,
+                        PartnerDocument.document_type.in_(["iec", "foreign_import_license"]),
+                        PartnerDocument.verified == True,
+                        PartnerDocument.is_expired == False
+                    )
+                )
+            )
+            buyer_license_doc = result.scalar_one_or_none()
+            
+            if not buyer_license_doc:
+                return {
+                    "blocked": True,
+                    "reason": f"Import license required for {commodity.name} but buyer does not have verified import license document",
+                    "violation_type": "IMPORT_LICENSE_MISSING",
+                    "required_license_types": import_regs.get("license_types", ["IEC"]),
+                    "commodity_name": commodity.name,
+                    "how_to_fix": "Upload import license certificate and get it verified"
+                }
+            
+            if buyer_license_doc.is_expired or (buyer_license_doc.expiry_date and buyer_license_doc.expiry_date < date.today()):
+                return {
+                    "blocked": True,
+                    "reason": f"Buyer has expired import license. License expired on {buyer_license_doc.expiry_date}",
+                    "violation_type": "IMPORT_LICENSE_EXPIRED",
+                    "license_number": buyer_license_doc.ocr_extracted_data.get("license_number") if buyer_license_doc.ocr_extracted_data else "Unknown",
+                    "expiry_date": buyer_license_doc.expiry_date.isoformat() if buyer_license_doc.expiry_date else None,
+                    "how_to_fix": "Renew import license"
+                }
+        
+        return {
+            "blocked": False,
+            "reason": "Export/Import license validation passed"
+        }
+
