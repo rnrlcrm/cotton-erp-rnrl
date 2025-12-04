@@ -299,6 +299,14 @@ class Availability(Base, EventMixin):
         lazy="select"
     )
     
+    # Anonymous match tokens (for privacy until negotiation)
+    match_tokens = relationship(
+        "MatchToken",
+        back_populates="availability",
+        cascade="all, delete-orphan",
+        lazy="select"
+    )
+    
     # Constraints
     __table_args__ = (
         CheckConstraint("total_quantity > 0", name="check_total_quantity_positive"),

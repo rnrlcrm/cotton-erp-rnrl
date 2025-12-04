@@ -31,6 +31,7 @@ from backend.core.auth.capabilities.definitions import Capabilities
 from backend.core.auth.capabilities.decorators import RequireCapability
 from backend.modules.trade_desk.models.requirement import Requirement
 from backend.modules.trade_desk.models.availability import Availability
+from backend.modules.trade_desk.models.match_token import MatchToken
 from backend.modules.trade_desk.matching.matching_engine import MatchingEngine, MatchResult
 from backend.modules.trade_desk.matching.validators import MatchValidator
 from backend.modules.trade_desk.matching.scoring import MatchScorer
@@ -39,6 +40,12 @@ from backend.modules.risk.risk_engine import RiskEngine
 from backend.modules.trade_desk.repositories.requirement_repository import RequirementRepository
 from backend.modules.trade_desk.repositories.availability_repository import AvailabilityRepository
 from backend.modules.trade_desk.services.matching_service import MatchingService
+from backend.modules.trade_desk.schemas.anonymous_match_response import (
+    AnonymousMatchResponse,
+    AnonymousFindMatchesResponse,
+    AnonymousMatchScoreBreakdown,
+    RevealedMatchResponse
+)
 
 
 router = APIRouter(prefix="/api/v1/matching", tags=["matching"])
@@ -164,16 +171,25 @@ def get_match_validator(db: AsyncSession = Depends(get_db)) -> MatchValidator:
 
 @router.post(
     "/requirements/{requirement_id}/find-matches",
-    response_model=FindMatchesResponse,
-    summary="Find matches for requirement",
+    response_model=AnonymousFindMatchesResponse,
+    summary="Find matches for requirement (Anonymous)",
     description="""
     Find seller availabilities matching a buyer requirement.
     
-    - Location-first filtering applied
-    - Returns top matches sorted by score
-    - Only active availabilities considered
-    - Min score threshold applied per commodity
-    - AI integration if available
+    🔒 PRIVACY: Identities are HIDDEN until negotiation starts.
+    
+    You will receive:
+    - Match quality scores
+    - Anonymous match tokens (e.g., MATCH-A7B2C)
+    - General location (region only)
+    - Quality/price fit details
+    
+    You will NOT see:
+    - Seller company names
+    - Exact locations
+    - Contact details
+    
+    To reveal identity: Start negotiation via /negotiations/start endpoint
     """
 )
 async def find_matches_for_requirement(
@@ -186,7 +202,7 @@ async def find_matches_for_requirement(
     matching_service: MatchingService = Depends(get_matching_service),
     idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key"),
     _check: None = Depends(RequireCapability(Capabilities.MATCHING_MANUAL))
-) -> FindMatchesResponse:
+) -> AnonymousFindMatchesResponse:
     """
     Find matches for a buyer requirement. Requires MATCHING_MANUAL capability.
     
@@ -228,28 +244,65 @@ async def find_matches_for_requirement(
     # Limit results
     matches = matches[:limit]
     
-    # Build response
-    match_responses = [
-        MatchResponse(
-            requirement_id=m.requirement_id,
-            availability_id=m.availability_id,
-            score=m.score,
-            base_score=m.base_score,
-            warn_penalty_applied=m.warn_penalty_applied,
-            warn_penalty_value=getattr(m, 'warn_penalty_value', 0.0),
-            ai_boost_applied=m.score_breakdown.get('ai_boost_applied', False),
-            ai_boost_value=m.score_breakdown.get('ai_boost_value', 0.0),
-            ai_recommended=m.score_breakdown.get('ai_recommended', False),
-            risk_status=m.risk_status,
-            risk_score=getattr(m, 'risk_score', None),
-            score_breakdown=MatchScoreBreakdown(**m.score_breakdown.get('breakdown', {})),
-            recommendations=m.score_breakdown.get('recommendations', ''),
-            matched_at=datetime.utcnow()
+    # Build anonymous response with match tokens
+    match_responses = []
+    for m in matches:
+        # Create or get existing match token
+        from sqlalchemy import select
+        stmt = select(MatchToken).where(
+            MatchToken.requirement_id == m.requirement_id,
+            MatchToken.availability_id == m.availability_id
         )
-        for m in matches
-    ]
+        result = await db.execute(stmt)
+        match_token = result.scalar_one_or_none()
+        
+        if not match_token:
+            # Create new anonymous token
+            match_token = MatchToken(
+                requirement_id=m.requirement_id,
+                availability_id=m.availability_id,
+                match_score=f"{m.score:.2f}",
+                disclosed_to_buyer="MATCHED",  # Initial state: anonymous
+                disclosed_to_seller="MATCHED"
+            )
+            db.add(match_token)
+        
+        # Get availability for region info (anonymized)
+        availability = await matching_service.availability_repo.get_by_id(m.availability_id, load_relationships=True)
+        
+        counterparty_region = None
+        counterparty_rating = None
+        if availability and availability.seller_branch:
+            # Show only region, not exact location
+            counterparty_region = availability.seller_branch.state or "Unknown Region"
+            counterparty_rating = getattr(availability, 'seller_rating_score', None)
+        
+        match_responses.append(
+            AnonymousMatchResponse(
+                match_token=match_token.token,
+                score=m.score,
+                base_score=m.base_score,
+                warn_penalty_applied=m.warn_penalty_applied,
+                warn_penalty_value=getattr(m, 'warn_penalty_value', 0.0),
+                ai_boost_applied=m.score_breakdown.get('ai_boost_applied', False),
+                ai_boost_value=m.score_breakdown.get('ai_boost_value', 0.0),
+                ai_recommended=m.score_breakdown.get('ai_recommended', False),
+                risk_status=m.risk_status,
+                risk_score=getattr(m, 'risk_score', None),
+                score_breakdown=AnonymousMatchScoreBreakdown(**m.score_breakdown.get('breakdown', {})),
+                recommendations=m.score_breakdown.get('recommendations', ''),
+                counterparty_region=counterparty_region,
+                counterparty_rating=counterparty_rating,
+                matched_at=datetime.utcnow(),
+                expires_at=match_token.expires_at,
+                disclosure_level="MATCHED"
+            )
+        )
     
-    return FindMatchesResponse(
+    # Commit match tokens to database
+    await db.commit()
+    
+    return AnonymousFindMatchesResponse(
         matches=match_responses,
         total_found=len(match_responses),
         request_id=requirement_id,
@@ -261,16 +314,25 @@ async def find_matches_for_requirement(
 
 @router.post(
     "/availabilities/{availability_id}/find-matches",
-    response_model=FindMatchesResponse,
-    summary="Find matches for availability",
+    response_model=AnonymousFindMatchesResponse,
+    summary="Find matches for availability (Anonymous)",
     description="""
     Find buyer requirements matching a seller availability.
     
-    - Location-first filtering applied
-    - Returns top matches sorted by score
-    - Only active requirements considered
-    - Min score threshold applied per commodity
-    - AI integration if available
+    🔒 PRIVACY: Identities are HIDDEN until negotiation starts.
+    
+    You will receive:
+    - Match quality scores
+    - Anonymous match tokens (e.g., MATCH-X9Y4Z)
+    - General location (region only)
+    - Quality/price fit details
+    
+    You will NOT see:
+    - Buyer company names
+    - Exact locations
+    - Contact details
+    
+    To reveal identity: Start negotiation via /negotiations/start endpoint
     """
 )
 async def find_matches_for_availability(
@@ -283,7 +345,7 @@ async def find_matches_for_availability(
     matching_service: MatchingService = Depends(get_matching_service),
     idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key"),
     _check: None = Depends(RequireCapability(Capabilities.MATCHING_MANUAL))
-) -> FindMatchesResponse:
+) -> AnonymousFindMatchesResponse:
     """
     Find matches for a seller availability. Requires MATCHING_MANUAL capability.
     
@@ -325,28 +387,66 @@ async def find_matches_for_availability(
     # Limit results
     matches = matches[:limit]
     
-    # Build response
-    match_responses = [
-        MatchResponse(
-            requirement_id=m.requirement_id,
-            availability_id=m.availability_id,
-            score=m.score,
-            base_score=m.base_score,
-            warn_penalty_applied=m.warn_penalty_applied,
-            warn_penalty_value=getattr(m, 'warn_penalty_value', 0.0),
-            ai_boost_applied=m.score_breakdown.get('ai_boost_applied', False),
-            ai_boost_value=m.score_breakdown.get('ai_boost_value', 0.0),
-            ai_recommended=m.score_breakdown.get('ai_recommended', False),
-            risk_status=m.risk_status,
-            risk_score=getattr(m, 'risk_score', None),
-            score_breakdown=MatchScoreBreakdown(**m.score_breakdown.get('breakdown', {})),
-            recommendations=m.score_breakdown.get('recommendations', ''),
-            matched_at=datetime.utcnow()
+    # Build anonymous response with match tokens
+    match_responses = []
+    for m in matches:
+        # Create or get existing match token
+        from sqlalchemy import select
+        stmt = select(MatchToken).where(
+            MatchToken.requirement_id == m.requirement_id,
+            MatchToken.availability_id == m.availability_id
         )
-        for m in matches
-    ]
+        result = await db.execute(stmt)
+        match_token = result.scalar_one_or_none()
+        
+        if not match_token:
+            # Create new anonymous token
+            match_token = MatchToken(
+                requirement_id=m.requirement_id,
+                availability_id=m.availability_id,
+                match_score=f"{m.score:.2f}",
+                disclosed_to_buyer="MATCHED",  # Initial state: anonymous
+                disclosed_to_seller="MATCHED"
+            )
+            db.add(match_token)
+        
+        # Get requirement for region info (anonymized)
+        requirement = await matching_service.requirement_repo.get_by_id(m.requirement_id, load_relationships=True)
+        
+        counterparty_region = None
+        counterparty_rating = None
+        if requirement and requirement.buyer_branch:
+            # Show only region, not exact location
+            counterparty_region = requirement.buyer_branch.state or "Unknown Region"
+            # Buyer rating (if available) - placeholder for now
+            counterparty_rating = None
+        
+        match_responses.append(
+            AnonymousMatchResponse(
+                match_token=match_token.token,
+                score=m.score,
+                base_score=m.base_score,
+                warn_penalty_applied=m.warn_penalty_applied,
+                warn_penalty_value=getattr(m, 'warn_penalty_value', 0.0),
+                ai_boost_applied=m.score_breakdown.get('ai_boost_applied', False),
+                ai_boost_value=m.score_breakdown.get('ai_boost_value', 0.0),
+                ai_recommended=m.score_breakdown.get('ai_recommended', False),
+                risk_status=m.risk_status,
+                risk_score=getattr(m, 'risk_score', None),
+                score_breakdown=AnonymousMatchScoreBreakdown(**m.score_breakdown.get('breakdown', {})),
+                recommendations=m.score_breakdown.get('recommendations', ''),
+                counterparty_region=counterparty_region,
+                counterparty_rating=counterparty_rating,
+                matched_at=datetime.utcnow(),
+                expires_at=match_token.expires_at,
+                disclosure_level="MATCHED"
+            )
+        )
     
-    return FindMatchesResponse(
+    # Commit match tokens to database
+    await db.commit()
+    
+    return AnonymousFindMatchesResponse(
         matches=match_responses,
         total_found=len(match_responses),
         request_id=availability_id,

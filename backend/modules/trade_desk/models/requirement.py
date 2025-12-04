@@ -575,6 +575,14 @@ class Requirement(Base, EventMixin):
         lazy="select"
     )
     
+    # Anonymous match tokens (for privacy until negotiation)
+    match_tokens = relationship(
+        "MatchToken",
+        back_populates="requirement",
+        cascade="all, delete-orphan",
+        lazy="select"
+    )
+    
     def __init__(self, **kwargs):
         """Initialize requirement with default values for fields that have server_default"""
         super().__init__(**kwargs)
