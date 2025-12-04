@@ -209,6 +209,7 @@ def create_app() -> FastAPI:
 	from backend.modules.trade_desk.routes.matching_router import router as matching_router
 	from backend.modules.trade_desk.routes.negotiation_routes import router as negotiation_router
 	from backend.modules.trade_desk.routes.negotiation_routes import admin_router as negotiation_admin_router
+	from backend.modules.notifications.routes import router as notifications_router
 	
 	app.include_router(websocket_router, prefix="/api/v1", tags=["websocket"])
 	app.include_router(webhooks_router, prefix="/api/v1", tags=["webhooks"])
@@ -217,6 +218,7 @@ def create_app() -> FastAPI:
 	app.include_router(session_router, prefix="/api/v1", tags=["sessions"])
 	app.include_router(risk_router, prefix="/api/v1", tags=["risk"])
 	# app.include_router(capabilities_router, prefix="/api/v1", tags=["capabilities"])  # FIXME: Has import errors
+	app.include_router(notifications_router, prefix="/api/v1", tags=["notifications"])
 	app.include_router(availability_router, prefix="/api/v1/trade-desk", tags=["trade-desk"])
 	app.include_router(requirement_router, prefix="/api/v1/trade-desk", tags=["trade-desk"])
 	app.include_router(matching_router, prefix="/api/v1/trade-desk", tags=["trade-desk"])
