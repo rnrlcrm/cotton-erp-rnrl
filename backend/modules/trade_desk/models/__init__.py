@@ -11,6 +11,9 @@ from backend.modules.trade_desk.models.match_token import MatchToken
 from backend.modules.trade_desk.models.negotiation import Negotiation
 from backend.modules.trade_desk.models.negotiation_offer import NegotiationOffer
 from backend.modules.trade_desk.models.negotiation_message import NegotiationMessage
+from backend.modules.trade_desk.models.trade import Trade
+from backend.modules.trade_desk.models.trade_signature import TradeSignature
+from backend.modules.trade_desk.models.trade_amendment import TradeAmendment
 
 __all__ = [
     "Availability",
@@ -22,4 +25,7 @@ __all__ = [
     "Negotiation",
     "NegotiationOffer",
     "NegotiationMessage",
+    "Trade",
+    "TradeSignature",
+    "TradeAmendment",
 ]
