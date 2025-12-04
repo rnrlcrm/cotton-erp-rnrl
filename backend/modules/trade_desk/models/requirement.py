@@ -566,6 +566,15 @@ class Requirement(Base, EventMixin):
     # cancelled_by_user = relationship("User", foreign_keys=[cancelled_by_user_id])
     buyer_branch = relationship("PartnerLocation", foreign_keys=[buyer_branch_id])
     
+    # Vector embedding relationship (one-to-one)
+    embedding = relationship(
+        "RequirementEmbedding",
+        back_populates="requirement",
+        uselist=False,
+        cascade="all, delete-orphan",
+        lazy="select"
+    )
+    
     def __init__(self, **kwargs):
         """Initialize requirement with default values for fields that have server_default"""
         super().__init__(**kwargs)

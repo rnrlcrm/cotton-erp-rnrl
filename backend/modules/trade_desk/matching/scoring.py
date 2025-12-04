@@ -7,6 +7,9 @@ Multi-factor scoring for requirement-availability matching:
 3. Delivery logistics (15% weight)
 4. Risk assessment (15% weight)
 
+ENHANCED: ML-based scoring using RandomForest predictor when model is available.
+FALLBACK: Rule-based scoring when ML model not trained.
+
 CRITICAL: WARN risk status applies 10% GLOBAL penalty to final score.
 """
 
@@ -19,6 +22,7 @@ from backend.modules.trade_desk.models.requirement import Requirement
 from backend.modules.trade_desk.models.availability import Availability
 from backend.modules.risk.risk_engine import RiskEngine
 from backend.modules.trade_desk.config.matching_config import MatchingConfig, get_matching_config
+from backend.modules.trade_desk.services.ml_match_scorer import MLMatchScorer
 
 logger = logging.getLogger(__name__)
 
@@ -28,20 +32,24 @@ class MatchScorer:
     Calculates individual score components for requirement-availability matching.
     
     All scores range from 0.0 (worst) to 1.0 (perfect).
+    
+    NEW: Supports ML-based scoring via MLMatchScorer when available.
     """
     
-    def __init__(self, config: Optional[MatchingConfig] = None):
+    def __init__(self, config: Optional[MatchingConfig] = None, ml_scorer: Optional[MLMatchScorer] = None):
         self.config = config or get_matching_config()
+        self.ml_scorer = ml_scorer  # Optional ML scorer
     
     # ========================================================================
-    # COMBINED MATCH SCORE WITH WARN PENALTY ⭐ CRITICAL
+    # COMBINED MATCH SCORE WITH ML SUPPORT ⭐ ENHANCED
     # ========================================================================
     
     async def calculate_match_score(
         self,
         requirement: Requirement,
         availability: Availability,
-        risk_engine: Optional[RiskEngine] = None
+        risk_engine: Optional[RiskEngine] = None,
+        use_ml: bool = True
     ) -> Dict[str, Any]:
         """
         Calculate comprehensive match score with breakdown.
@@ -103,17 +111,46 @@ class MatchScorer:
             risk_result = {"risk_status": "SKIPPED"}
             warn_penalty = 0.0
         
-        # Get commodity-specific weights
-        commodity_code = requirement.commodity.code if requirement.commodity else "default"
-        weights = self.config.get_scoring_weights(commodity_code)
+        # TRY ML PREDICTION FIRST (if available and enabled)
+        ml_prediction = None
+        if use_ml and self.ml_scorer and self.ml_scorer.is_trained:
+            try:
+                ml_prediction = await self.ml_scorer.predict_requirement_availability_match(
+                    requirement=requirement,
+                    availability=availability,
+                    quality_score=quality_result["score"],
+                    price_score=price_result["score"],
+                    delivery_score=delivery_result["score"],
+                    risk_score=risk_score
+                )
+                
+                # Use ML predicted probability as base score
+                base_score = ml_prediction["success_probability"]
+                scoring_method = "ml_random_forest"
+                
+                logger.info(
+                    f"✅ ML prediction: {base_score:.3f} "
+                    f"(quality={quality_result['score']:.2f}, price={price_result['score']:.2f})"
+                )
+                
+            except Exception as e:
+                logger.error(f"ML prediction failed, falling back to rules: {e}")
+                ml_prediction = None
         
-        # Calculate base score (weighted average)
-        base_score = (
-            quality_result["score"] * weights["quality"] +
-            price_result["score"] * weights["price"] +
-            delivery_result["score"] * weights["delivery"] +
-            risk_score * weights["risk"]
-        )
+        # FALLBACK TO RULE-BASED SCORING
+        if ml_prediction is None:
+            # Get commodity-specific weights
+            commodity_code = requirement.commodity.code if requirement.commodity else "default"
+            weights = self.config.get_scoring_weights(commodity_code)
+            
+            # Calculate base score (weighted average)
+            base_score = (
+                quality_result["score"] * weights["quality"] +
+                price_result["score"] * weights["price"] +
+                delivery_result["score"] * weights["delivery"] +
+                risk_score * weights["risk"]
+            )
+            scoring_method = "rule_based"
         
         # Apply WARN penalty (global -10%)
         final_score = base_score * (1.0 - warn_penalty)
@@ -160,6 +197,8 @@ class MatchScorer:
         return {
             "total_score": round(final_score, 4),
             "base_score": round(base_score, 4),
+            "scoring_method": scoring_method,  # "ml_random_forest" or "rule_based"
+            "ml_prediction": ml_prediction,  # ML prediction details (if used)
             "warn_penalty_applied": warn_penalty > 0,
             "warn_penalty_value": warn_penalty,
             "ai_boost_applied": ai_boost > 0,
