@@ -6,6 +6,14 @@ class DomainError(Exception):
 class AuthError(DomainError):
     code = "auth_error"
 
+class AuthorizationException(DomainError):
+    """Raised when user is not authorized to perform an action."""
+    code = "authorization_error"
+
+class BusinessRuleException(DomainError):
+    """Raised when business rule is violated."""
+    code = "business_rule_violation"
+
 class ValidationError(DomainError):
     code = "validation_error"
 

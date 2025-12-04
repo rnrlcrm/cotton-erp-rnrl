@@ -71,7 +71,7 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint('id'),
         sa.ForeignKeyConstraint(['requirement_id'], ['requirements.id'], ondelete='CASCADE'),
         sa.ForeignKeyConstraint(['availability_id'], ['availabilities.id'], ondelete='CASCADE'),
-        sa.ForeignKeyConstraint(['trade_id'], ['trades.id'], ondelete='SET NULL'),
+        # NOTE: trade_id FK will be added when trades table is created (Trade Engine - Phase 5)
     )
     
     # Indexes for efficient querying
