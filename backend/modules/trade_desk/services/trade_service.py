@@ -36,7 +36,7 @@ from backend.modules.partners.repositories.branch_repository import BranchReposi
 from backend.modules.partners.models import PartnerBranch, BusinessPartner
 from backend.core.errors.exceptions import (
     NotFoundException,
-    ValidationException,
+    ValidationError,
     BusinessRuleException
 )
 
@@ -103,7 +103,7 @@ class TradeService:
         Raises:
             NotFoundException: Negotiation not found
             BusinessRuleException: Negotiation not accepted, signatures missing
-            ValidationException: Invalid branch selections
+            ValidationError: Invalid branch selections
         """
         # Load negotiation with all relationships
         stmt = select(Negotiation).where(
