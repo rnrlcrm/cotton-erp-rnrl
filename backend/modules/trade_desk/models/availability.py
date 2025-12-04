@@ -290,6 +290,15 @@ class Availability(Base, EventMixin):
     seller = relationship("BusinessPartner", foreign_keys=[seller_partner_id])
     seller_branch = relationship("PartnerLocation", foreign_keys=[seller_branch_id])
     
+    # Vector embedding relationship (one-to-one)
+    embedding = relationship(
+        "AvailabilityEmbedding",
+        back_populates="availability",
+        uselist=False,
+        cascade="all, delete-orphan",
+        lazy="select"
+    )
+    
     # Constraints
     __table_args__ = (
         CheckConstraint("total_quantity > 0", name="check_total_quantity_positive"),
