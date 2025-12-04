@@ -214,12 +214,11 @@ class Negotiation(Base, EventMixin):
         comment="Allow AI to negotiate on seller's behalf"
     )
     
-    # Trade creation
+    # Trade creation (FK will be added when trade engine is implemented)
     trade_id = Column(
         PGUUID(as_uuid=True),
-        ForeignKey("trades.id"),
         nullable=True,
-        comment="Trade contract created if accepted"
+        comment="Trade contract created if accepted (FK to trades.id)"
     )
     
     # Metadata

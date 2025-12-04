@@ -27,9 +27,9 @@ from backend.modules.trade_desk.models.negotiation_message import NegotiationMes
 from backend.modules.trade_desk.models.match_token import MatchToken
 from backend.modules.trade_desk.models.requirement import Requirement
 from backend.modules.trade_desk.models.availability import Availability
-from backend.core.exceptions import (
+from backend.core.errors.exceptions import (
     NotFoundException,
-    ValidationException,
+    DomainError as ValidationException,
     AuthorizationException,
     BusinessRuleException
 )

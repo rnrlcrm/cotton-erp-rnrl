@@ -19,8 +19,9 @@ from fastapi import (
 )
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.core.dependencies import get_db, get_current_user
-from backend.modules.partner.models.partner import Partner
+from backend.db.async_session import get_db
+from backend.core.auth.dependencies import get_current_user
+from backend.modules.settings.models.settings_models import User
 from backend.modules.trade_desk.services.negotiation_service import NegotiationService
 from backend.modules.trade_desk.services.ai_negotiation_service import AINegoticationService
 from backend.modules.trade_desk.websocket.negotiation_rooms import negotiation_room_manager
@@ -62,7 +63,7 @@ def get_ai_service(db: AsyncSession = Depends(get_db)) -> AINegoticationService:
 @router.post("/start", response_model=NegotiationResponse, status_code=status.HTTP_201_CREATED)
 async def start_negotiation(
     request: StartNegotiationRequest,
-    current_user: Partner = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
     service: NegotiationService = Depends(get_negotiation_service)
 ):
     """
@@ -70,15 +71,21 @@ async def start_negotiation(
     
     Reveals identities and creates negotiation session.
     """
+    if not current_user.business_partner_id:
+        raise HTTPException(
+            status_code=403,
+            detail="Only external users with business partner can negotiate"
+        )
+    
     try:
         negotiation = await service.start_negotiation(
             match_token=request.match_token,
-            user_partner_id=current_user.id,
+            user_partner_id=current_user.business_partner_id,
             initial_message=request.initial_message
         )
         
         # Determine user role
-        if negotiation.buyer_partner_id == current_user.id:
+        if negotiation.buyer_partner_id == current_user.business_partner_id:
             user_role = PartyEnum.BUYER
         else:
             user_role = PartyEnum.SELLER
@@ -101,16 +108,19 @@ async def start_negotiation(
 async def make_offer(
     negotiation_id: UUID,
     request: MakeOfferRequest,
-    current_user: Partner = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
     service: NegotiationService = Depends(get_negotiation_service)
 ):
     """
     Make or counter an offer.
     """
+    if not current_user.business_partner_id:
+        raise HTTPException(status_code=403, detail="Partner access required")
+    
     try:
         offer = await service.make_offer(
             negotiation_id=negotiation_id,
-            user_partner_id=current_user.id,
+            user_partner_id=current_user.business_partner_id,
             price_per_unit=request.price_per_unit,
             quantity=request.quantity,
             delivery_terms=request.delivery_terms,
@@ -133,7 +143,7 @@ async def make_offer(
 async def accept_offer(
     negotiation_id: UUID,
     request: AcceptOfferRequest,
-    current_user: Partner = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
     service: NegotiationService = Depends(get_negotiation_service)
 ):
     """
@@ -141,15 +151,18 @@ async def accept_offer(
     
     Closes negotiation and creates trade contract.
     """
+    if not current_user.business_partner_id:
+        raise HTTPException(status_code=403, detail="Partner access required")
+    
     try:
         negotiation = await service.accept_offer(
             negotiation_id=negotiation_id,
-            user_partner_id=current_user.id,
+            user_partner_id=current_user.business_partner_id,
             acceptance_message=request.acceptance_message
         )
         
         # Determine user role
-        if negotiation.buyer_partner_id == current_user.id:
+        if negotiation.buyer_partner_id == current_user.business_partner_id:
             user_role = PartyEnum.BUYER
         else:
             user_role = PartyEnum.SELLER
@@ -171,12 +184,15 @@ async def accept_offer(
 async def reject_offer(
     negotiation_id: UUID,
     request: RejectOfferRequest,
-    current_user: Partner = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
     service: NegotiationService = Depends(get_negotiation_service)
 ):
     """
     Reject offer with optional counter.
     """
+    if not current_user.business_partner_id:
+        raise HTTPException(status_code=403, detail="Partner access required")
+    
     try:
         # Prepare counter-offer params if requested
         counter_params = None
@@ -198,14 +214,14 @@ async def reject_offer(
         
         negotiation = await service.reject_offer(
             negotiation_id=negotiation_id,
-            user_partner_id=current_user.id,
+            user_partner_id=current_user.business_partner_id,
             rejection_reason=request.rejection_reason,
             make_counter_offer=request.make_counter_offer,
             counter_offer_params=counter_params
         )
         
         # Determine user role
-        if negotiation.buyer_partner_id == current_user.id:
+        if negotiation.buyer_partner_id == current_user.business_partner_id:
             user_role = PartyEnum.BUYER
         else:
             user_role = PartyEnum.SELLER
@@ -227,16 +243,19 @@ async def reject_offer(
 async def send_message(
     negotiation_id: UUID,
     request: SendMessageRequest,
-    current_user: Partner = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
     service: NegotiationService = Depends(get_negotiation_service)
 ):
     """
     Send chat message in negotiation.
     """
+    if not current_user.business_partner_id:
+        raise HTTPException(status_code=403, detail="Partner access required")
+    
     try:
         message = await service.send_message(
             negotiation_id=negotiation_id,
-            user_partner_id=current_user.id,
+            user_partner_id=current_user.business_partner_id,
             message=request.message,
             message_type=request.message_type.value
         )
@@ -254,20 +273,23 @@ async def send_message(
 @router.get("/{negotiation_id}", response_model=NegotiationResponse)
 async def get_negotiation(
     negotiation_id: UUID,
-    current_user: Partner = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
     service: NegotiationService = Depends(get_negotiation_service)
 ):
     """
     Get negotiation details with offers and messages.
     """
+    if not current_user.business_partner_id:
+        raise HTTPException(status_code=403, detail="Partner access required")
+    
     try:
         negotiation = await service.get_negotiation_by_id(
             negotiation_id=negotiation_id,
-            user_partner_id=current_user.id
+            user_partner_id=current_user.business_partner_id
         )
         
         # Determine user role
-        if negotiation.buyer_partner_id == current_user.id:
+        if negotiation.buyer_partner_id == current_user.business_partner_id:
             user_role = PartyEnum.BUYER
         else:
             user_role = PartyEnum.SELLER
@@ -305,15 +327,18 @@ async def list_negotiations(
     status_filter: Optional[str] = Query(None, alias="status"),
     limit: int = Query(20, ge=1, le=100),
     offset: int = Query(0, ge=0),
-    current_user: Partner = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
     service: NegotiationService = Depends(get_negotiation_service)
 ):
     """
     List user's negotiations with pagination.
     """
+    if not current_user.business_partner_id:
+        raise HTTPException(status_code=403, detail="Partner access required")
+    
     try:
         negotiations = await service.get_user_negotiations(
-            user_partner_id=current_user.id,
+            user_partner_id=current_user.business_partner_id,
             status_filter=status_filter,
             limit=limit,
             offset=offset
@@ -323,7 +348,7 @@ async def list_negotiations(
         items = []
         for neg in negotiations:
             # Determine user role
-            if neg.buyer_partner_id == current_user.id:
+            if neg.buyer_partner_id == current_user.business_partner_id:
                 user_role = PartyEnum.BUYER
                 counterparty_name = neg.seller_partner.business_name if neg.seller_partner else "Unknown"
             else:
@@ -373,18 +398,21 @@ async def list_negotiations(
 async def get_ai_suggestion(
     negotiation_id: UUID,
     request: AIAssistRequest,
-    current_user: Partner = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
     negotiation_service: NegotiationService = Depends(get_negotiation_service),
     ai_service: AINegoticationService = Depends(get_ai_service)
 ):
     """
     Get AI-powered counter-offer suggestion.
     """
+    if not current_user.business_partner_id:
+        raise HTTPException(status_code=403, detail="Partner access required")
+    
     try:
         # Get negotiation
         negotiation = await negotiation_service.get_negotiation_by_id(
             negotiation_id=negotiation_id,
-            user_partner_id=current_user.id
+            user_partner_id=current_user.business_partner_id
         )
         
         # Get latest offer
@@ -394,7 +422,7 @@ async def get_ai_suggestion(
         latest_offer = negotiation.offers[-1]
         
         # Determine user party
-        if negotiation.buyer_partner_id == current_user.id:
+        if negotiation.buyer_partner_id == current_user.business_partner_id:
             user_party = "BUYER"
         else:
             user_party = "SELLER"

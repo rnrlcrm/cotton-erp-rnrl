@@ -56,8 +56,8 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(['match_token_id'], ['match_tokens.id'], ondelete='CASCADE'),
         sa.ForeignKeyConstraint(['requirement_id'], ['requirements.id'], ondelete='CASCADE'),
         sa.ForeignKeyConstraint(['availability_id'], ['availabilities.id'], ondelete='CASCADE'),
-        sa.ForeignKeyConstraint(['buyer_partner_id'], ['partners.id'], ondelete='CASCADE'),
-        sa.ForeignKeyConstraint(['seller_partner_id'], ['partners.id'], ondelete='CASCADE'),
+        sa.ForeignKeyConstraint(['buyer_partner_id'], ['business_partners.id'], ondelete='CASCADE'),
+        sa.ForeignKeyConstraint(['seller_partner_id'], ['business_partners.id'], ondelete='CASCADE'),
         
         sa.CheckConstraint("status IN ('INITIATED', 'IN_PROGRESS', 'ACCEPTED', 'REJECTED', 'EXPIRED')", name='valid_negotiation_status'),
         sa.CheckConstraint("accepted_by IN ('BUYER', 'SELLER') OR accepted_by IS NULL", name='valid_accepted_by'),
