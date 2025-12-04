@@ -158,6 +158,7 @@ class User(Base, EventMixin):
 	# organization relationship commented out until Organization.users backref is added
 	# organization: Mapped[Organization | None] = relationship("Organization", back_populates="users")
 	# business_partner relationship will be added when BP module is fully implemented
+	notifications: Mapped[list["Notification"]] = relationship("Notification", back_populates="user", cascade="all, delete-orphan")
 
 
 class UserRole(Base):
