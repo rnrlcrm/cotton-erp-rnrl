@@ -9,9 +9,15 @@ from backend.modules.trade_desk.websocket.requirement_websocket import (
     RequirementWebSocketService,
     get_requirement_ws_service,
 )
+from backend.modules.trade_desk.websocket.negotiation_rooms import (
+    NegotiationRoomManager,
+    negotiation_room_manager,
+)
 
 __all__ = [
     "RequirementChannelPatterns",
     "RequirementWebSocketService",
     "get_requirement_ws_service",
+    "NegotiationRoomManager",
+    "negotiation_room_manager",
 ]

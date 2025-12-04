@@ -105,6 +105,14 @@ class MatchToken(Base):
     requirement = relationship("Requirement", back_populates="match_tokens")
     availability = relationship("Availability", back_populates="match_tokens")
     
+    # Negotiation relationship (one-to-one)
+    negotiation = relationship(
+        "Negotiation",
+        back_populates="match_token",
+        uselist=False,
+        cascade="all, delete-orphan"
+    )
+    
     # Indexes for fast lookups
     __table_args__ = (
         Index("idx_match_tokens_requirement", "requirement_id"),

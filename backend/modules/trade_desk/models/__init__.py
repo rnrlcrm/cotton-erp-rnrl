@@ -8,6 +8,9 @@ from backend.modules.trade_desk.models.availability_embedding import Availabilit
 from backend.modules.trade_desk.models.requirement_embedding import RequirementEmbedding
 from backend.modules.trade_desk.models.match_outcome import MatchOutcome
 from backend.modules.trade_desk.models.match_token import MatchToken
+from backend.modules.trade_desk.models.negotiation import Negotiation
+from backend.modules.trade_desk.models.negotiation_offer import NegotiationOffer
+from backend.modules.trade_desk.models.negotiation_message import NegotiationMessage
 
 __all__ = [
     "Availability",
@@ -16,4 +19,7 @@ __all__ = [
     "RequirementEmbedding",
     "MatchOutcome",
     "MatchToken",
+    "Negotiation",
+    "NegotiationOffer",
+    "NegotiationMessage",
 ]
