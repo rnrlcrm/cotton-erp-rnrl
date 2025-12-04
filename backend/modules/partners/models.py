@@ -704,3 +704,212 @@ class PartnerKYCRenewal(Base):
     notes = Column(Text, nullable=True)
     
     created_at = Column(DateTime(timezone=True), server_default=text("NOW()"))
+
+
+class PartnerBranch(Base, EventMixin):
+    """
+    Partner Branch - Multi-location support for business partners
+    
+    Features:
+    - Multiple branches per partner
+    - Ship-to, Bill-to, Ship-from addresses
+    - Geolocation for AI distance calculation
+    - Warehouse capacity tracking
+    - Commodity-specific capabilities
+    - Head office designation
+    
+    Usage in Trade Engine:
+    1. AI suggests optimal branches based on:
+       - Same state (avoid IGST)
+       - Distance from buyer/seller
+       - Warehouse capacity
+       - Commodity handling capability
+    
+    2. User can select different branch if AI suggestion not suitable
+    
+    3. Addresses frozen at trade creation (JSONB snapshot in trades table)
+    
+    Example:
+        # Partner with multiple branches
+        partner = BusinessPartner(...)
+        
+        # Head office (bill-to only)
+        head_office = PartnerBranch(
+            partner_id=partner.id,
+            branch_code="HO",
+            branch_name="Head Office - Mumbai",
+            is_head_office=True,
+            can_receive_shipments=False,
+            can_send_shipments=False,
+        )
+        
+        # Warehouse (ship-to/ship-from)
+        warehouse = PartnerBranch(
+            partner_id=partner.id,
+            branch_code="WH-01",
+            branch_name="Warehouse - Ahmedabad",
+            can_receive_shipments=True,
+            can_send_shipments=True,
+            warehouse_capacity_qtls=5000,
+            supported_commodities=["COTTON", "WHEAT"],
+            is_default_ship_to=True,
+        )
+    """
+    __tablename__ = "partner_branches"
+    
+    # Primary key
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    
+    # Foreign key
+    partner_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("business_partners.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+        comment="Link to business partner"
+    )
+    
+    # Branch identification
+    branch_code = Column(
+        String(50),
+        nullable=False,
+        comment="Unique code within partner (HO, WH-01, etc.)"
+    )
+    branch_name = Column(
+        String(200),
+        nullable=False,
+        comment="Display name (e.g., 'Head Office - Mumbai')"
+    )
+    branch_type = Column(
+        String(50),
+        nullable=True,
+        comment="head_office, warehouse, sales_office, factory, etc."
+    )
+    
+    # Complete address
+    address_line_1 = Column(String(200), nullable=False)
+    address_line_2 = Column(String(200), nullable=True)
+    city = Column(String(100), nullable=False, index=True)
+    state = Column(String(100), nullable=False, index=True, comment="For GST calculation")
+    postal_code = Column(String(20), nullable=False)
+    country = Column(String(100), nullable=False, default="India")
+    
+    # Geolocation for AI distance calculation
+    latitude = Column(Numeric(10, 7), nullable=True, comment="For distance calculation")
+    longitude = Column(Numeric(10, 7), nullable=True, comment="For distance calculation")
+    
+    # Tax
+    gstin = Column(
+        String(15),
+        nullable=True,
+        comment="Branch-specific GSTIN if different from head office"
+    )
+    
+    # Capabilities
+    can_receive_shipments = Column(
+        Boolean,
+        default=False,
+        comment="Can be used as ship-to address"
+    )
+    can_send_shipments = Column(
+        Boolean,
+        default=False,
+        comment="Can be used as ship-from address"
+    )
+    warehouse_capacity_qtls = Column(
+        Integer,
+        nullable=True,
+        comment="Total warehouse capacity in quintals (for AI scoring)"
+    )
+    current_stock_qtls = Column(
+        Integer,
+        nullable=True,
+        default=0,
+        comment="Current stock level (updated by inventory module)"
+    )
+    
+    # Commodity-specific
+    supported_commodities = Column(
+        JSON,
+        nullable=True,
+        comment="Array of commodity codes this branch can handle"
+    )
+    
+    # Default flags
+    is_head_office = Column(
+        Boolean,
+        default=False,
+        comment="Is this the head office (default bill-to)"
+    )
+    is_default_ship_to = Column(
+        Boolean,
+        default=False,
+        comment="Default ship-to address"
+    )
+    is_default_ship_from = Column(
+        Boolean,
+        default=False,
+        comment="Default ship-from address"
+    )
+    
+    # Status
+    is_active = Column(Boolean, default=True)
+    
+    # Metadata
+    created_at = Column(DateTime(timezone=True), server_default=text("NOW()"))
+    updated_at = Column(
+        DateTime(timezone=True),
+        server_default=text("NOW()"),
+        onupdate=text("NOW()")
+    )
+    created_by = Column(UUID(as_uuid=True), nullable=True)
+    
+    def to_address_dict(self) -> dict:
+        """
+        Convert branch to address dictionary for trade contracts
+        
+        Returns:
+            dict: Address in contract format
+        """
+        return {
+            "branch_code": self.branch_code,
+            "branch_name": self.branch_name,
+            "address_line_1": self.address_line_1,
+            "address_line_2": self.address_line_2,
+            "city": self.city,
+            "state": self.state,
+            "postal_code": self.postal_code,
+            "country": self.country,
+            "gstin": self.gstin,
+        }
+    
+    def can_handle_commodity(self, commodity_code: str) -> bool:
+        """
+        Check if branch can handle specific commodity
+        
+        Args:
+            commodity_code: Commodity code to check
+            
+        Returns:
+            bool: True if supported or no restriction
+        """
+        if not self.supported_commodities:
+            return True  # No restriction
+        return commodity_code in self.supported_commodities
+    
+    def has_capacity_for(self, quantity_qtls: int) -> bool:
+        """
+        Check if branch has capacity for quantity
+        
+        Args:
+            quantity_qtls: Quantity in quintals
+            
+        Returns:
+            bool: True if capacity available
+        """
+        if not self.warehouse_capacity_qtls:
+            return True  # No capacity tracking
+        
+        current = self.current_stock_qtls or 0
+        available = self.warehouse_capacity_qtls - current
+        return available >= quantity_qtls
