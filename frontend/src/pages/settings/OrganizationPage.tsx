@@ -15,6 +15,13 @@ import {
   CheckCircleIcon,
 } from '@heroicons/react/24/outline';
 import organizationService from '@/services/api/organizationService';
+import { useToast } from '@/contexts/ToastContext';
+import { 
+  GSTModal, 
+  BankAccountModal, 
+  FinancialYearModal, 
+  DocumentSeriesModal 
+} from '@/components/settings/OrganizationModals';
 import type { 
   Organization, 
   OrganizationGST, 
@@ -24,6 +31,7 @@ import type {
 } from '@/types/settings';
 
 export default function OrganizationPage() {
+  const toast = useToast();
   const [activeTab, setActiveTab] = useState<'company' | 'gst' | 'banks' | 'fy' | 'docs'>('company');
   const [organization, setOrganization] = useState<Organization | null>(null);
   const [gstList, setGstList] = useState<OrganizationGST[]>([]);
@@ -32,6 +40,12 @@ export default function OrganizationPage() {
   const [documentSeries, setDocumentSeries] = useState<OrganizationDocumentSeries[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  
+  // Modal states
+  const [gstModal, setGstModal] = useState<{ open: boolean; data?: OrganizationGST }>({ open: false });
+  const [bankModal, setBankModal] = useState<{ open: boolean; data?: OrganizationBankAccount }>({ open: false });
+  const [fyModal, setFyModal] = useState<{ open: boolean; data?: OrganizationFinancialYear }>({ open: false });
+  const [docModal, setDocModal] = useState<{ open: boolean; data?: OrganizationDocumentSeries }>({ open: false });
 
   useEffect(() => {
     loadOrganizationData();

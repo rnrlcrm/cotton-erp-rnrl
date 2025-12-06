@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { ProtectedRoute } from './components/auth/ProtectedRoute';
 import { InactivityMonitor } from './components/auth/InactivityMonitor';
+import { ToastProvider } from './contexts/ToastContext';
 import { LoginPage } from './pages/auth/LoginPage';
 import { ForgotPasswordPage } from './pages/auth/ForgotPasswordPage';
 import { ResetPasswordPage } from './pages/auth/ResetPasswordPage';
@@ -22,8 +23,9 @@ export default function App() {
   console.log('App component rendered - 2040 Architecture with Auth!');
   
   return (
-    <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
-      <InactivityMonitor />
+    <ToastProvider>
+      <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+        <InactivityMonitor />
       <Routes>
         {/* Public routes */}
         <Route path="/login" element={<LoginPage />} />
@@ -58,6 +60,7 @@ export default function App() {
         </Route>
       </Routes>
     </BrowserRouter>
+    </ToastProvider>
   );
 }
 
