@@ -152,9 +152,9 @@ steps:
     args:
       - '-c'
       - |
-        BACKEND_URL=$(gcloud run services describe backend-service --region=us-central1 --format='value(status.url)')
-        echo "Testing backend at: $BACKEND_URL/health"
-        curl -f "$BACKEND_URL/health" || exit 1
+        BACKEND_URL=$$(gcloud run services describe backend-service --region=us-central1 --format='value(status.url)')
+        echo "Testing backend at: $$BACKEND_URL/health"
+        curl -f "$$BACKEND_URL/health" || exit 1
         echo "✅ Backend health check passed"
     waitFor: ['run-migrations']
 
