@@ -54,7 +54,6 @@ COPY --from=builder /install /usr/local
 
 # Copy application code
 COPY backend/ /app/backend/
-COPY ai/ /app/ai/
 
 # Create directories for ML models and uploads
 RUN mkdir -p /app/ml_models /app/uploads && \
