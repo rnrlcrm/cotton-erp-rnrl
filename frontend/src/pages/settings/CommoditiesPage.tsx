@@ -14,6 +14,14 @@ import {
   TrashIcon,
   MagnifyingGlassIcon,
 } from '@heroicons/react/24/outline';
+import { useToast } from '@/contexts/ToastContext';
+import {
+  CommodityModal,
+  TradeTypeModal,
+  BargainTypeModal,
+  TermModal,
+  PaymentTermModal,
+} from '@/components/settings/CommodityModals';
 import commodityService from '@/services/api/commodityService';
 import type {
   Commodity,
@@ -26,6 +34,7 @@ import type {
 } from '@/types/settings';
 
 export default function CommoditiesPage() {
+  const toast = useToast();
   const [activeTab, setActiveTab] = useState<'commodities' | 'trade-types' | 'bargain-types' | 'terms'>('commodities');
   const [commodities, setCommodities] = useState<Commodity[]>([]);
   const [tradeTypes, setTradeTypes] = useState<TradeType[]>([]);
@@ -36,6 +45,15 @@ export default function CommoditiesPage() {
   const [paymentTerms, setPaymentTerms] = useState<PaymentTerm[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Modal states
+  const [commodityModal, setCommodityModal] = useState<{ open: boolean; data?: Commodity }>({ open: false });
+  const [tradeTypeModal, setTradeTypeModal] = useState<{ open: boolean; data?: TradeType }>({ open: false });
+  const [bargainTypeModal, setBargainTypeModal] = useState<{ open: boolean; data?: BargainType }>({ open: false });
+  const [passingTermModal, setPassingTermModal] = useState<{ open: boolean; data?: PassingTerm }>({ open: false });
+  const [weightmentTermModal, setWeightmentTermModal] = useState<{ open: boolean; data?: WeightmentTerm }>({ open: false });
+  const [deliveryTermModal, setDeliveryTermModal] = useState<{ open: boolean; data?: DeliveryTerm }>({ open: false });
+  const [paymentTermModal, setPaymentTermModal] = useState<{ open: boolean; data?: PaymentTerm }>({ open: false });
 
   useEffect(() => {
     loadCommodityData();
@@ -73,6 +91,18 @@ export default function CommoditiesPage() {
       setError(err.message || 'Failed to load commodity data');
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Delete handlers
+  const handleDeleteCommodity = async (id: string) => {
+    if (!confirm('Are you sure you want to delete this commodity?')) return;
+    try {
+      await commodityService.deleteCommodity(id);
+      toast.success('Commodity deleted successfully');
+      loadCommodityData();
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to delete commodity');
     }
   };
 
@@ -141,15 +171,28 @@ export default function CommoditiesPage() {
       {/* Content */}
       <div className="bg-pearl-900/20 backdrop-blur-sm border border-pearl-700/30 rounded-xl p-6">
         {activeTab === 'commodities' && (
-          <CommoditiesList commodities={commodities} onUpdate={loadCommodityData} />
+          <CommoditiesList 
+            commodities={commodities} 
+            onAdd={() => setCommodityModal({ open: true })}
+            onEdit={(commodity) => setCommodityModal({ open: true, data: commodity })}
+            onDelete={handleDeleteCommodity}
+          />
         )}
         
         {activeTab === 'trade-types' && (
-          <TradeTypesList tradeTypes={tradeTypes} onUpdate={loadCommodityData} />
+          <TradeTypesList 
+            tradeTypes={tradeTypes} 
+            onAdd={() => setTradeTypeModal({ open: true })}
+            onEdit={(type) => setTradeTypeModal({ open: true, data: type })}
+          />
         )}
         
         {activeTab === 'bargain-types' && (
-          <BargainTypesList bargainTypes={bargainTypes} onUpdate={loadCommodityData} />
+          <BargainTypesList 
+            bargainTypes={bargainTypes} 
+            onAdd={() => setBargainTypeModal({ open: true })}
+            onEdit={(type) => setBargainTypeModal({ open: true, data: type })}
+          />
         )}
         
         {activeTab === 'terms' && (
@@ -158,16 +201,80 @@ export default function CommoditiesPage() {
             weightmentTerms={weightmentTerms}
             deliveryTerms={deliveryTerms}
             paymentTerms={paymentTerms}
-            onUpdate={loadCommodityData}
+            onAddPassing={() => setPassingTermModal({ open: true })}
+            onEditPassing={(term) => setPassingTermModal({ open: true, data: term })}
+            onAddWeightment={() => setWeightmentTermModal({ open: true })}
+            onEditWeightment={(term) => setWeightmentTermModal({ open: true, data: term })}
+            onAddDelivery={() => setDeliveryTermModal({ open: true })}
+            onEditDelivery={(term) => setDeliveryTermModal({ open: true, data: term })}
+            onAddPayment={() => setPaymentTermModal({ open: true })}
+            onEditPayment={(term) => setPaymentTermModal({ open: true, data: term })}
           />
         )}
       </div>
+
+      {/* Modals */}
+      <CommodityModal
+        isOpen={commodityModal.open}
+        onClose={() => setCommodityModal({ open: false })}
+        commodity={commodityModal.data}
+        onSuccess={loadCommodityData}
+      />
+      <TradeTypeModal
+        isOpen={tradeTypeModal.open}
+        onClose={() => setTradeTypeModal({ open: false })}
+        tradeType={tradeTypeModal.data}
+        onSuccess={loadCommodityData}
+      />
+      <BargainTypeModal
+        isOpen={bargainTypeModal.open}
+        onClose={() => setBargainTypeModal({ open: false })}
+        bargainType={bargainTypeModal.data}
+        onSuccess={loadCommodityData}
+      />
+      <TermModal
+        isOpen={passingTermModal.open}
+        onClose={() => setPassingTermModal({ open: false })}
+        term={passingTermModal.data}
+        termType="passing"
+        onSuccess={loadCommodityData}
+      />
+      <TermModal
+        isOpen={weightmentTermModal.open}
+        onClose={() => setWeightmentTermModal({ open: false })}
+        term={weightmentTermModal.data}
+        termType="weightment"
+        onSuccess={loadCommodityData}
+      />
+      <TermModal
+        isOpen={deliveryTermModal.open}
+        onClose={() => setDeliveryTermModal({ open: false })}
+        term={deliveryTermModal.data}
+        termType="delivery"
+        onSuccess={loadCommodityData}
+      />
+      <PaymentTermModal
+        isOpen={paymentTermModal.open}
+        onClose={() => setPaymentTermModal({ open: false })}
+        paymentTerm={paymentTermModal.data}
+        onSuccess={loadCommodityData}
+      />
     </div>
   );
 }
 
 // Component for Commodities List
-function CommoditiesList({ commodities }: { commodities: Commodity[]; onUpdate?: () => void }) {
+function CommoditiesList({ 
+  commodities, 
+  onAdd, 
+  onEdit, 
+  onDelete 
+}: { 
+  commodities: Commodity[]; 
+  onAdd: () => void;
+  onEdit: (commodity: Commodity) => void;
+  onDelete: (id: string) => void;
+}) {
   const [searchTerm, setSearchTerm] = useState('');
   
   const filteredCommodities = commodities.filter(c =>
@@ -190,7 +297,10 @@ function CommoditiesList({ commodities }: { commodities: Commodity[]; onUpdate?:
               className="pl-10 pr-4 py-2 bg-pearl-800/50 border border-pearl-700/30 rounded-lg text-pearl-100 placeholder-pearl-500 focus:outline-none focus:ring-2 focus:ring-sun-500"
             />
           </div>
-          <button className="px-4 py-2 bg-gradient-to-r from-saturn-500 to-sun-500 text-white rounded-lg hover:from-saturn-600 hover:to-sun-600 transition-all flex items-center space-x-2">
+          <button 
+            onClick={onAdd}
+            className="px-4 py-2 bg-gradient-to-r from-saturn-500 to-sun-500 text-white rounded-lg hover:from-saturn-600 hover:to-sun-600 transition-all flex items-center space-x-2"
+          >
             <PlusIcon className="w-4 h-4" />
             <span>Add Commodity</span>
           </button>
@@ -234,10 +344,16 @@ function CommoditiesList({ commodities }: { commodities: Commodity[]; onUpdate?:
                   </div>
                 </div>
                 <div className="flex space-x-2">
-                  <button className="p-2 hover:bg-pearl-700/30 rounded transition-colors">
+                  <button 
+                    onClick={() => onEdit(commodity)}
+                    className="p-2 hover:bg-pearl-700/30 rounded transition-colors"
+                  >
                     <PencilIcon className="w-4 h-4 text-pearl-400" />
                   </button>
-                  <button className="p-2 hover:bg-mars-500/20 rounded transition-colors">
+                  <button 
+                    onClick={() => onDelete(commodity.id)}
+                    className="p-2 hover:bg-mars-500/20 rounded transition-colors"
+                  >
                     <TrashIcon className="w-4 h-4 text-mars-400" />
                   </button>
                 </div>
@@ -251,12 +367,23 @@ function CommoditiesList({ commodities }: { commodities: Commodity[]; onUpdate?:
 }
 
 // Component for Trade Types List
-function TradeTypesList({ tradeTypes }: { tradeTypes: TradeType[]; onUpdate?: () => void }) {
+function TradeTypesList({ 
+  tradeTypes, 
+  onAdd, 
+  onEdit 
+}: { 
+  tradeTypes: TradeType[]; 
+  onAdd: () => void;
+  onEdit: (type: TradeType) => void;
+}) {
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center">
         <h2 className="text-xl font-semibold text-pearl-100">Trade Types</h2>
-        <button className="px-4 py-2 bg-gradient-to-r from-saturn-500 to-sun-500 text-white rounded-lg hover:from-saturn-600 hover:to-sun-600 transition-all flex items-center space-x-2">
+        <button 
+          onClick={onAdd}
+          className="px-4 py-2 bg-gradient-to-r from-saturn-500 to-sun-500 text-white rounded-lg hover:from-saturn-600 hover:to-sun-600 transition-all flex items-center space-x-2"
+        >
           <PlusIcon className="w-4 h-4" />
           <span>Add Trade Type</span>
         </button>
@@ -271,11 +398,11 @@ function TradeTypesList({ tradeTypes }: { tradeTypes: TradeType[]; onUpdate?: ()
                 <p className="text-pearl-400 text-sm mt-1">{type.description}</p>
               </div>
               <div className="flex space-x-1">
-                <button className="p-1.5 hover:bg-pearl-700/30 rounded transition-colors">
+                <button 
+                  onClick={() => onEdit(type)}
+                  className="p-1.5 hover:bg-pearl-700/30 rounded transition-colors"
+                >
                   <PencilIcon className="w-3.5 h-3.5 text-pearl-400" />
-                </button>
-                <button className="p-1.5 hover:bg-mars-500/20 rounded transition-colors">
-                  <TrashIcon className="w-3.5 h-3.5 text-mars-400" />
                 </button>
               </div>
             </div>
@@ -287,12 +414,23 @@ function TradeTypesList({ tradeTypes }: { tradeTypes: TradeType[]; onUpdate?: ()
 }
 
 // Component for Bargain Types List
-function BargainTypesList({ bargainTypes }: { bargainTypes: BargainType[]; onUpdate?: () => void }) {
+function BargainTypesList({ 
+  bargainTypes, 
+  onAdd, 
+  onEdit 
+}: { 
+  bargainTypes: BargainType[]; 
+  onAdd: () => void;
+  onEdit: (type: BargainType) => void;
+}) {
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center">
         <h2 className="text-xl font-semibold text-pearl-100">Bargain Types</h2>
-        <button className="px-4 py-2 bg-gradient-to-r from-saturn-500 to-sun-500 text-white rounded-lg hover:from-saturn-600 hover:to-sun-600 transition-all flex items-center space-x-2">
+        <button 
+          onClick={onAdd}
+          className="px-4 py-2 bg-gradient-to-r from-saturn-500 to-sun-500 text-white rounded-lg hover:from-saturn-600 hover:to-sun-600 transition-all flex items-center space-x-2"
+        >
           <PlusIcon className="w-4 h-4" />
           <span>Add Bargain Type</span>
         </button>
@@ -307,11 +445,11 @@ function BargainTypesList({ bargainTypes }: { bargainTypes: BargainType[]; onUpd
                 <p className="text-pearl-400 text-sm mt-1">{type.description}</p>
               </div>
               <div className="flex space-x-1">
-                <button className="p-1.5 hover:bg-pearl-700/30 rounded transition-colors">
+                <button 
+                  onClick={() => onEdit(type)}
+                  className="p-1.5 hover:bg-pearl-700/30 rounded transition-colors"
+                >
                   <PencilIcon className="w-3.5 h-3.5 text-pearl-400" />
-                </button>
-                <button className="p-1.5 hover:bg-mars-500/20 rounded transition-colors">
-                  <TrashIcon className="w-3.5 h-3.5 text-mars-400" />
                 </button>
               </div>
             </div>
@@ -328,12 +466,27 @@ function TradingTerms({
   weightmentTerms,
   deliveryTerms,
   paymentTerms,
+  onAddPassing,
+  onEditPassing,
+  onAddWeightment,
+  onEditWeightment,
+  onAddDelivery,
+  onEditDelivery,
+  onAddPayment,
+  onEditPayment,
 }: {
   passingTerms: PassingTerm[];
   weightmentTerms: WeightmentTerm[];
   deliveryTerms: DeliveryTerm[];
   paymentTerms: PaymentTerm[];
-  onUpdate?: () => void;
+  onAddPassing: () => void;
+  onEditPassing: (term: PassingTerm) => void;
+  onAddWeightment: () => void;
+  onEditWeightment: (term: WeightmentTerm) => void;
+  onAddDelivery: () => void;
+  onEditDelivery: (term: DeliveryTerm) => void;
+  onAddPayment: () => void;
+  onEditPayment: (term: PaymentTerm) => void;
 }) {
   const [activeTermTab, setActiveTermTab] = useState<'passing' | 'weightment' | 'delivery' | 'payment'>('passing');
 
@@ -366,22 +519,62 @@ function TradingTerms({
       </div>
 
       <div className="pt-4">
-        {activeTermTab === 'passing' && <TermsList terms={passingTerms} type="Passing" />}
-        {activeTermTab === 'weightment' && <TermsList terms={weightmentTerms} type="Weightment" />}
-        {activeTermTab === 'delivery' && <TermsList terms={deliveryTerms} type="Delivery" />}
-        {activeTermTab === 'payment' && <PaymentTermsList terms={paymentTerms} />}
+        {activeTermTab === 'passing' && (
+          <TermsList 
+            terms={passingTerms} 
+            type="Passing" 
+            onAdd={onAddPassing}
+            onEdit={onEditPassing}
+          />
+        )}
+        {activeTermTab === 'weightment' && (
+          <TermsList 
+            terms={weightmentTerms} 
+            type="Weightment" 
+            onAdd={onAddWeightment}
+            onEdit={onEditWeightment}
+          />
+        )}
+        {activeTermTab === 'delivery' && (
+          <TermsList 
+            terms={deliveryTerms} 
+            type="Delivery" 
+            onAdd={onAddDelivery}
+            onEdit={onEditDelivery}
+          />
+        )}
+        {activeTermTab === 'payment' && (
+          <PaymentTermsList 
+            terms={paymentTerms} 
+            onAdd={onAddPayment}
+            onEdit={onEditPayment}
+          />
+        )}
       </div>
     </div>
   );
 }
 
 // Generic Terms List Component
-function TermsList({ terms, type }: { terms: any[]; type: string }) {
+function TermsList({ 
+  terms, 
+  type, 
+  onAdd, 
+  onEdit 
+}: { 
+  terms: any[]; 
+  type: string;
+  onAdd: () => void;
+  onEdit: (term: any) => void;
+}) {
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center">
         <h3 className="text-lg font-medium text-pearl-200">{type} Terms</h3>
-        <button className="px-3 py-1.5 bg-gradient-to-r from-saturn-500 to-sun-500 text-white text-sm rounded-lg hover:from-saturn-600 hover:to-sun-600 transition-all flex items-center space-x-2">
+        <button 
+          onClick={onAdd}
+          className="px-3 py-1.5 bg-gradient-to-r from-saturn-500 to-sun-500 text-white text-sm rounded-lg hover:from-saturn-600 hover:to-sun-600 transition-all flex items-center space-x-2"
+        >
           <PlusIcon className="w-3.5 h-3.5" />
           <span>Add {type} Term</span>
         </button>
@@ -398,11 +591,11 @@ function TermsList({ terms, type }: { terms: any[]; type: string }) {
                 )}
               </div>
               <div className="flex space-x-1">
-                <button className="p-1 hover:bg-pearl-700/30 rounded transition-colors">
+                <button 
+                  onClick={() => onEdit(term)}
+                  className="p-1 hover:bg-pearl-700/30 rounded transition-colors"
+                >
                   <PencilIcon className="w-3 h-3 text-pearl-400" />
-                </button>
-                <button className="p-1 hover:bg-mars-500/20 rounded transition-colors">
-                  <TrashIcon className="w-3 h-3 text-mars-400" />
                 </button>
               </div>
             </div>
@@ -414,12 +607,23 @@ function TermsList({ terms, type }: { terms: any[]; type: string }) {
 }
 
 // Payment Terms List Component (with days)
-function PaymentTermsList({ terms }: { terms: PaymentTerm[] }) {
+function PaymentTermsList({ 
+  terms, 
+  onAdd, 
+  onEdit 
+}: { 
+  terms: PaymentTerm[];
+  onAdd: () => void;
+  onEdit: (term: PaymentTerm) => void;
+}) {
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center">
         <h3 className="text-lg font-medium text-pearl-200">Payment Terms</h3>
-        <button className="px-3 py-1.5 bg-gradient-to-r from-saturn-500 to-sun-500 text-white text-sm rounded-lg hover:from-saturn-600 hover:to-sun-600 transition-all flex items-center space-x-2">
+        <button 
+          onClick={onAdd}
+          className="px-3 py-1.5 bg-gradient-to-r from-saturn-500 to-sun-500 text-white text-sm rounded-lg hover:from-saturn-600 hover:to-sun-600 transition-all flex items-center space-x-2"
+        >
           <PlusIcon className="w-3.5 h-3.5" />
           <span>Add Payment Term</span>
         </button>
@@ -439,11 +643,11 @@ function PaymentTermsList({ terms }: { terms: PaymentTerm[] }) {
                 )}
               </div>
               <div className="flex space-x-1">
-                <button className="p-1 hover:bg-pearl-700/30 rounded transition-colors">
+                <button 
+                  onClick={() => onEdit(term)}
+                  className="p-1 hover:bg-pearl-700/30 rounded transition-colors"
+                >
                   <PencilIcon className="w-3 h-3 text-pearl-400" />
-                </button>
-                <button className="p-1 hover:bg-mars-500/20 rounded transition-colors">
-                  <TrashIcon className="w-3 h-3 text-mars-400" />
                 </button>
               </div>
             </div>

@@ -79,6 +79,50 @@ export default function OrganizationPage() {
     }
   };
 
+  const handleDeleteGST = async (id: string) => {
+    if (!confirm('Are you sure you want to delete this GST detail?')) return;
+    try {
+      await organizationService.deleteGST(id);
+      toast.success('GST deleted successfully');
+      loadOrganizationData();
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to delete GST');
+    }
+  };
+
+  const handleDeleteBank = async (id: string) => {
+    if (!confirm('Are you sure you want to delete this bank account?')) return;
+    try {
+      await organizationService.deleteBankAccount(id);
+      toast.success('Bank account deleted successfully');
+      loadOrganizationData();
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to delete bank account');
+    }
+  };
+
+  const handleDeleteFY = async (id: string) => {
+    if (!confirm('Are you sure you want to delete this financial year?')) return;
+    try {
+      await organizationService.deleteFinancialYear(id);
+      toast.success('Financial year deleted successfully');
+      loadOrganizationData();
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to delete financial year');
+    }
+  };
+
+  const handleDeleteDocSeries = async (id: string) => {
+    if (!confirm('Are you sure you want to delete this document series?')) return;
+    try {
+      await organizationService.deleteDocumentSeries(id);
+      toast.success('Document series deleted successfully');
+      loadOrganizationData();
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to delete document series');
+    }
+  };
+
   const tabs = [
     { id: 'company' as const, label: 'Company Details', icon: BuildingOfficeIcon },
     { id: 'gst' as const, label: 'GST', icon: DocumentTextIcon },
@@ -151,35 +195,77 @@ export default function OrganizationPage() {
         {activeTab === 'gst' && (
           <GSTManagement 
             gstList={gstList} 
-            organizationId={organization?.id || ''} 
-            onUpdate={loadOrganizationData} 
+            organizationId={organization?.id || ''}
+            onAdd={() => setGstModal({ open: true })}
+            onEdit={(gst) => setGstModal({ open: true, data: gst })}
+            onDelete={handleDeleteGST}
           />
         )}
         
         {activeTab === 'banks' && (
           <BankAccountsManagement 
             accounts={bankAccounts} 
-            organizationId={organization?.id || ''} 
-            onUpdate={loadOrganizationData} 
+            organizationId={organization?.id || ''}
+            onAdd={() => setBankModal({ open: true })}
+            onEdit={(account) => setBankModal({ open: true, data: account })}
+            onDelete={handleDeleteBank}
           />
         )}
         
         {activeTab === 'fy' && (
           <FinancialYearsManagement 
             years={financialYears} 
-            organizationId={organization?.id || ''} 
-            onUpdate={loadOrganizationData} 
+            organizationId={organization?.id || ''}
+            onAdd={() => setFyModal({ open: true })}
+            onEdit={(year) => setFyModal({ open: true, data: year })}
+            onDelete={handleDeleteFY}
           />
         )}
         
         {activeTab === 'docs' && (
           <DocumentSeriesManagement 
             series={documentSeries} 
-            organizationId={organization?.id || ''} 
-            onUpdate={loadOrganizationData} 
+            organizationId={organization?.id || ''}
+            onAdd={() => setDocModal({ open: true })}
+            onEdit={(doc) => setDocModal({ open: true, data: doc })}
+            onDelete={handleDeleteDocSeries}
           />
         )}
       </div>
+
+      {/* Modals */}
+      {organization && (
+        <>
+          <GSTModal
+            isOpen={gstModal.open}
+            onClose={() => setGstModal({ open: false })}
+            organizationId={organization.id}
+            gst={gstModal.data}
+            onSuccess={loadOrganizationData}
+          />
+          <BankAccountModal
+            isOpen={bankModal.open}
+            onClose={() => setBankModal({ open: false })}
+            organizationId={organization.id}
+            account={bankModal.data}
+            onSuccess={loadOrganizationData}
+          />
+          <FinancialYearModal
+            isOpen={fyModal.open}
+            onClose={() => setFyModal({ open: false })}
+            organizationId={organization.id}
+            year={fyModal.data}
+            onSuccess={loadOrganizationData}
+          />
+          <DocumentSeriesModal
+            isOpen={docModal.open}
+            onClose={() => setDocModal({ open: false })}
+            organizationId={organization.id}
+            series={docModal.data}
+            onSuccess={loadOrganizationData}
+          />
+        </>
+      )}
     </div>
   );
 }
@@ -256,16 +342,21 @@ function CompanyDetails({ organization }: { organization: Organization; onUpdate
 }
 
 // Component for GST Management tab
-function GSTManagement({ gstList }: {
+function GSTManagement({ gstList, onAdd, onEdit, onDelete }: {
   gstList: OrganizationGST[];
   organizationId?: string;
-  onUpdate?: () => void;
+  onAdd: () => void;
+  onEdit: (gst: OrganizationGST) => void;
+  onDelete: (id: string) => void;
 }) {
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center">
         <h2 className="text-xl font-semibold text-pearl-100">GST Details</h2>
-        <button className="px-4 py-2 bg-gradient-to-r from-saturn-500 to-sun-500 text-white rounded-lg hover:from-saturn-600 hover:to-sun-600 transition-all flex items-center space-x-2">
+        <button 
+          onClick={onAdd}
+          className="px-4 py-2 bg-gradient-to-r from-saturn-500 to-sun-500 text-white rounded-lg hover:from-saturn-600 hover:to-sun-600 transition-all flex items-center space-x-2"
+        >
           <PlusIcon className="w-4 h-4" />
           <span>Add GST</span>
         </button>
@@ -294,10 +385,16 @@ function GSTManagement({ gstList }: {
                   <p className="text-pearl-500 text-sm mt-1">{gst.address} - {gst.state}</p>
                 </div>
                 <div className="flex space-x-2">
-                  <button className="p-2 hover:bg-pearl-700/30 rounded transition-colors">
+                  <button 
+                    onClick={() => onEdit(gst)}
+                    className="p-2 hover:bg-pearl-700/30 rounded transition-colors"
+                  >
                     <PencilIcon className="w-4 h-4 text-pearl-400" />
                   </button>
-                  <button className="p-2 hover:bg-mars-500/20 rounded transition-colors">
+                  <button 
+                    onClick={() => onDelete(gst.id)}
+                    className="p-2 hover:bg-mars-500/20 rounded transition-colors"
+                  >
                     <TrashIcon className="w-4 h-4 text-mars-400" />
                   </button>
                 </div>
@@ -311,16 +408,21 @@ function GSTManagement({ gstList }: {
 }
 
 // Component for Bank Accounts Management tab
-function BankAccountsManagement({ accounts }: {
+function BankAccountsManagement({ accounts, onAdd, onEdit, onDelete }: {
   accounts: OrganizationBankAccount[];
   organizationId?: string;
-  onUpdate?: () => void;
+  onAdd: () => void;
+  onEdit: (account: OrganizationBankAccount) => void;
+  onDelete: (id: string) => void;
 }) {
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center">
         <h2 className="text-xl font-semibold text-pearl-100">Bank Accounts</h2>
-        <button className="px-4 py-2 bg-gradient-to-r from-saturn-500 to-sun-500 text-white rounded-lg hover:from-saturn-600 hover:to-sun-600 transition-all flex items-center space-x-2">
+        <button 
+          onClick={onAdd}
+          className="px-4 py-2 bg-gradient-to-r from-saturn-500 to-sun-500 text-white rounded-lg hover:from-saturn-600 hover:to-sun-600 transition-all flex items-center space-x-2"
+        >
           <PlusIcon className="w-4 h-4" />
           <span>Add Account</span>
         </button>
@@ -350,10 +452,16 @@ function BankAccountsManagement({ accounts }: {
                   </p>
                 </div>
                 <div className="flex space-x-2">
-                  <button className="p-2 hover:bg-pearl-700/30 rounded transition-colors">
+                  <button 
+                    onClick={() => onEdit(account)}
+                    className="p-2 hover:bg-pearl-700/30 rounded transition-colors"
+                  >
                     <PencilIcon className="w-4 h-4 text-pearl-400" />
                   </button>
-                  <button className="p-2 hover:bg-mars-500/20 rounded transition-colors">
+                  <button 
+                    onClick={() => onDelete(account.id)}
+                    className="p-2 hover:bg-mars-500/20 rounded transition-colors"
+                  >
                     <TrashIcon className="w-4 h-4 text-mars-400" />
                   </button>
                 </div>
@@ -367,16 +475,21 @@ function BankAccountsManagement({ accounts }: {
 }
 
 // Component for Financial Years Management tab
-function FinancialYearsManagement({ years }: {
+function FinancialYearsManagement({ years, onAdd, onEdit, onDelete }: {
   years: OrganizationFinancialYear[];
   organizationId?: string;
-  onUpdate?: () => void;
+  onAdd: () => void;
+  onEdit: (year: OrganizationFinancialYear) => void;
+  onDelete: (id: string) => void;
 }) {
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center">
         <h2 className="text-xl font-semibold text-pearl-100">Financial Years</h2>
-        <button className="px-4 py-2 bg-gradient-to-r from-saturn-500 to-sun-500 text-white rounded-lg hover:from-saturn-600 hover:to-sun-600 transition-all flex items-center space-x-2">
+        <button 
+          onClick={onAdd}
+          className="px-4 py-2 bg-gradient-to-r from-saturn-500 to-sun-500 text-white rounded-lg hover:from-saturn-600 hover:to-sun-600 transition-all flex items-center space-x-2"
+        >
           <PlusIcon className="w-4 h-4" />
           <span>Add Financial Year</span>
         </button>
@@ -406,10 +519,16 @@ function FinancialYearsManagement({ years }: {
                   </p>
                 </div>
                 <div className="flex space-x-2">
-                  <button className="p-2 hover:bg-pearl-700/30 rounded transition-colors">
+                  <button 
+                    onClick={() => onEdit(fy)}
+                    className="p-2 hover:bg-pearl-700/30 rounded transition-colors"
+                  >
                     <PencilIcon className="w-4 h-4 text-pearl-400" />
                   </button>
-                  <button className="p-2 hover:bg-mars-500/20 rounded transition-colors">
+                  <button 
+                    onClick={() => onDelete(fy.id)}
+                    className="p-2 hover:bg-mars-500/20 rounded transition-colors"
+                  >
                     <TrashIcon className="w-4 h-4 text-mars-400" />
                   </button>
                 </div>
@@ -423,16 +542,21 @@ function FinancialYearsManagement({ years }: {
 }
 
 // Component for Document Series Management tab
-function DocumentSeriesManagement({ series }: {
+function DocumentSeriesManagement({ series, onAdd, onEdit, onDelete }: {
   series: OrganizationDocumentSeries[];
   organizationId?: string;
-  onUpdate?: () => void;
+  onAdd: () => void;
+  onEdit: (doc: OrganizationDocumentSeries) => void;
+  onDelete: (id: string) => void;
 }) {
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center">
-        <h2 className="text-xl font-semibold text-pearl-100">Document Numbering Series</h2>
-        <button className="px-4 py-2 bg-gradient-to-r from-saturn-500 to-sun-500 text-white rounded-lg hover:from-saturn-600 hover:to-sun-600 transition-all flex items-center space-x-2">
+        <h2 className="text-xl font-semibold text-pearl-100">Document Series</h2>
+        <button 
+          onClick={onAdd}
+          className="px-4 py-2 bg-gradient-to-r from-saturn-500 to-sun-500 text-white rounded-lg hover:from-saturn-600 hover:to-sun-600 transition-all flex items-center space-x-2"
+        >
           <PlusIcon className="w-4 h-4" />
           <span>Add Series</span>
         </button>
@@ -457,10 +581,16 @@ function DocumentSeriesManagement({ series }: {
                   </p>
                 </div>
                 <div className="flex space-x-2">
-                  <button className="p-2 hover:bg-pearl-700/30 rounded transition-colors">
+                  <button 
+                    onClick={() => onEdit(doc)}
+                    className="p-2 hover:bg-pearl-700/30 rounded transition-colors"
+                  >
                     <PencilIcon className="w-4 h-4 text-pearl-400" />
                   </button>
-                  <button className="p-2 hover:bg-mars-500/20 rounded transition-colors">
+                  <button 
+                    onClick={() => onDelete(doc.id)}
+                    className="p-2 hover:bg-mars-500/20 rounded transition-colors"
+                  >
                     <TrashIcon className="w-4 h-4 text-mars-400" />
                   </button>
                 </div>
