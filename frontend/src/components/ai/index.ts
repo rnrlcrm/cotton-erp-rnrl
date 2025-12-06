@@ -3,6 +3,8 @@
 
 export { default as AIChatWidget } from './AIChatWidget';
 export { default as SemanticSearchWidget } from './SemanticSearchWidget';
-export { default as DocumentAnalysisWidget } from './DocumentAnalysisWidget';
-export { default as TradeSuggestionsWidget } from './TradeSuggestionsWidget';
-export { default as QualityInsightsWidget } from './QualityInsightsWidget';
+
+// TODO: Create missing AI widgets
+// export { default as DocumentAnalysisWidget } from './DocumentAnalysisWidget';
+// export { default as TradeSuggestionsWidget } from './TradeSuggestionsWidget';
+// export { default as QualityInsightsWidget } from './QualityInsightsWidget';

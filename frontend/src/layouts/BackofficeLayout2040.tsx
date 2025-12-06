@@ -4,7 +4,7 @@
  */
 
 import { useState, useEffect } from 'react';
-import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
+import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import {
   HomeIcon,
@@ -19,6 +19,10 @@ import {
   DocumentTextIcon,
   CurrencyDollarIcon,
   SparklesIcon,
+  BuildingOfficeIcon,
+  CubeIcon,
+  MapPinIcon,
+  KeyIcon,
 } from '@heroicons/react/24/outline';
 import { QuantumHub } from '@/components/2040/QuantumHub';
 
@@ -232,16 +236,49 @@ export function BackofficeLayout2040() {
                       <UserCircleIcon className="w-4 h-4 text-saturn-600" />
                       <span className="text-sm text-saturn-900">Profile</span>
                     </button>
-                    <button
-                      onClick={() => {
-                        setShowProfile(false);
-                        navigate('/backoffice/settings/sessions');
-                      }}
-                      className="w-full flex items-center gap-2 px-3 py-2 hover:bg-saturn-50 rounded-lg transition-all duration-120 text-left"
-                    >
-                      <CogIcon className="w-4 h-4 text-saturn-600" />
-                      <span className="text-sm text-saturn-900">Sessions</span>
-                    </button>
+                    <div className="border-t border-saturn-200 my-2 pt-2">
+                      <p className="px-3 py-1 text-xs font-semibold text-saturn-500 uppercase tracking-wide">Settings</p>
+                      <button
+                        onClick={() => {
+                          setShowProfile(false);
+                          navigate('/backoffice/settings/organization');
+                        }}
+                        className="w-full flex items-center gap-2 px-3 py-2 hover:bg-saturn-50 rounded-lg transition-all duration-120 text-left"
+                      >
+                        <BuildingOfficeIcon className="w-4 h-4 text-saturn-600" />
+                        <span className="text-sm text-saturn-900">Organization</span>
+                      </button>
+                      <button
+                        onClick={() => {
+                          setShowProfile(false);
+                          navigate('/backoffice/settings/commodities');
+                        }}
+                        className="w-full flex items-center gap-2 px-3 py-2 hover:bg-saturn-50 rounded-lg transition-all duration-120 text-left"
+                      >
+                        <CubeIcon className="w-4 h-4 text-saturn-600" />
+                        <span className="text-sm text-saturn-900">Commodities</span>
+                      </button>
+                      <button
+                        onClick={() => {
+                          setShowProfile(false);
+                          navigate('/backoffice/settings/locations');
+                        }}
+                        className="w-full flex items-center gap-2 px-3 py-2 hover:bg-saturn-50 rounded-lg transition-all duration-120 text-left"
+                      >
+                        <MapPinIcon className="w-4 h-4 text-saturn-600" />
+                        <span className="text-sm text-saturn-900">Locations</span>
+                      </button>
+                      <button
+                        onClick={() => {
+                          setShowProfile(false);
+                          navigate('/backoffice/settings/sessions');
+                        }}
+                        className="w-full flex items-center gap-2 px-3 py-2 hover:bg-saturn-50 rounded-lg transition-all duration-120 text-left"
+                      >
+                        <KeyIcon className="w-4 h-4 text-saturn-600" />
+                        <span className="text-sm text-saturn-900">Sessions & Security</span>
+                      </button>
+                    </div>
                     <hr className="my-2 border-saturn-200" />
                     <button 
                       onClick={handleLogout}
