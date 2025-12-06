@@ -9,7 +9,7 @@ import { useAuth } from '@/hooks/useAuth';
 import {
   HomeIcon,
   ChartBarIcon,
-  UsersIcon,
+  KeyIcon,
   CogIcon,
   BellIcon,
   ArrowRightOnRectangleIcon,
@@ -34,7 +34,7 @@ const systems = [
   { id: 'risk', name: 'Risk', href: '/backoffice/risk', icon: ExclamationTriangleIcon },
   { id: 'accounts', name: 'Accounts', href: '/backoffice/accounts', icon: CurrencyDollarIcon },
   { id: 'audit', name: 'Audit', href: '/backoffice/audit', icon: DocumentTextIcon },
-  { id: 'users', name: 'Users', href: '/backoffice/users', icon: UsersIcon },
+  { id: 'capabilities', name: 'Capabilities', href: '/backoffice/capabilities', icon: KeyIcon },
   { id: 'settings', name: 'Settings', href: '/backoffice/settings', icon: CogIcon },
 ];
 
@@ -75,7 +75,7 @@ export function BackofficeLayout2040() {
     else if (path.includes('/risk')) setActiveSystem('risk');
     else if (path.includes('/accounts')) setActiveSystem('accounts');
     else if (path.includes('/audit')) setActiveSystem('audit');
-    else if (path.includes('/users')) setActiveSystem('users');
+    else if (path.includes('/capabilities')) setActiveSystem('capabilities');
     else if (path.includes('/settings')) setActiveSystem('settings');
   }, [location.pathname]);
 

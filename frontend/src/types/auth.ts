@@ -8,7 +8,8 @@ export interface User {
   email: string;
   full_name: string;
   user_type: 'SUPER_ADMIN' | 'INTERNAL' | 'EXTERNAL';
-  role?: string;
+  role?: string; // Deprecated - use capabilities instead
+  capabilities: string[]; // Array of capability codes
   is_active: boolean;
   organization_id?: string;
   business_partner_id?: string;

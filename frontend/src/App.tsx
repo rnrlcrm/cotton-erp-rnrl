@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { ProtectedRoute } from './components/auth/ProtectedRoute';
 import { InactivityMonitor } from './components/auth/InactivityMonitor';
 import { ToastProvider } from './contexts/ToastContext';
+import { AuthProvider } from './contexts/AuthContext';
 import { LoginPage } from './pages/auth/LoginPage';
 import { ForgotPasswordPage } from './pages/auth/ForgotPasswordPage';
 import { ResetPasswordPage } from './pages/auth/ResetPasswordPage';
@@ -10,7 +11,7 @@ import { DashboardPage } from './pages/backoffice/DashboardPage';
 import { ClearingSettlementPage } from './pages/backoffice/ClearingSettlementPage';
 import { RiskMonitoringPage } from './pages/backoffice/RiskMonitoringPage';
 import { ComplianceAuditPage } from './pages/backoffice/ComplianceAuditPage';
-import { UserManagementPage } from './pages/backoffice/UserManagementPage';
+import { CapabilitiesManagementPage } from './pages/backoffice/CapabilitiesManagementPage';
 import { AccountsFinancePage } from './pages/backoffice/AccountsFinancePage';
 import { ProfilePage } from './pages/settings/ProfilePage';
 import { SessionsPage } from './pages/settings/SessionsPage';
@@ -23,10 +24,11 @@ export default function App() {
   console.log('App component rendered - 2040 Architecture with Auth!');
   
   return (
-    <ToastProvider>
-      <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
-        <InactivityMonitor />
-      <Routes>
+    <AuthProvider>
+      <ToastProvider>
+        <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+          <InactivityMonitor />
+        <Routes>
         {/* Public routes */}
         <Route path="/login" element={<LoginPage />} />
         <Route path="/forgot-password" element={<ForgotPasswordPage />} />
@@ -47,7 +49,7 @@ export default function App() {
           <Route path="clearing" element={<ClearingSettlementPage />} />
           <Route path="risk" element={<RiskMonitoringPage />} />
           <Route path="audit" element={<ComplianceAuditPage />} />
-          <Route path="users" element={<UserManagementPage />} />
+          <Route path="capabilities" element={<CapabilitiesManagementPage />} />
           <Route path="accounts" element={<AccountsFinancePage />} />
           <Route path="settings/profile" element={<ProfilePage />} />
           <Route path="settings/sessions" element={<SessionsPage />} />
@@ -60,7 +62,8 @@ export default function App() {
         </Route>
       </Routes>
     </BrowserRouter>
-    </ToastProvider>
+      </ToastProvider>
+    </AuthProvider>
   );
 }
 
