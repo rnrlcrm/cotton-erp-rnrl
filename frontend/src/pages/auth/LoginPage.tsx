@@ -4,7 +4,7 @@
  */
 
 import { useState, FormEvent } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { 
   EnvelopeIcon, 
@@ -145,12 +145,12 @@ export function LoginPage() {
                 </label>
               </div>
 
-              <button
-                type="button"
+              <Link
+                to="/forgot-password"
                 className="text-sm font-medium text-saturn-600 hover:text-saturn-900 transition-colors"
               >
                 Forgot password?
-              </button>
+              </Link>
             </div>
 
             {/* Submit button */}

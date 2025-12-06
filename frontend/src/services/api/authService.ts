@@ -149,6 +149,60 @@ class AuthService {
     localStorage.removeItem(API_CONFIG.REFRESH_TOKEN_STORAGE_KEY);
     localStorage.removeItem(API_CONFIG.USER_STORAGE_KEY);
   }
+
+  /**
+   * Get 2FA status
+   */
+  async get2FAStatus(): Promise<{ enabled: boolean }> {
+    const response = await apiClient.get(API_ENDPOINTS.AUTH.TWO_FACTOR_STATUS);
+    return response.data;
+  }
+
+  /**
+   * Setup 2FA - Get QR code and secret
+   */
+  async setup2FA(): Promise<{ qr_code: string; secret: string }> {
+    const response = await apiClient.post(API_ENDPOINTS.AUTH.TWO_FACTOR_SETUP);
+    return response.data;
+  }
+
+  /**
+   * Verify and enable 2FA
+   */
+  async verify2FA(code: string): Promise<void> {
+    await apiClient.post(API_ENDPOINTS.AUTH.TWO_FACTOR_VERIFY, { code });
+  }
+
+  /**
+   * Disable 2FA
+   */
+  async disable2FA(): Promise<void> {
+    await apiClient.delete(API_ENDPOINTS.AUTH.TWO_FACTOR_DISABLE);
+  }
+
+  /**
+   * Request password reset email
+   */
+  async forgotPassword(email: string): Promise<void> {
+    await apiClient.post(API_ENDPOINTS.AUTH.FORGOT_PASSWORD, { email });
+  }
+
+  /**
+   * Reset password with token
+   */
+  async resetPassword(token: string, newPassword: string): Promise<void> {
+    await apiClient.post(API_ENDPOINTS.AUTH.RESET_PASSWORD, {
+      token,
+      new_password: newPassword,
+    });
+  }
+
+  /**
+   * Verify email with token
+   */
+  async verifyEmail(token: string): Promise<void> {
+    await apiClient.post(API_ENDPOINTS.AUTH.VERIFY_EMAIL, { token });
+  }
 }
 
 export const authService = new AuthService();

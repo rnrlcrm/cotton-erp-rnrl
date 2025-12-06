@@ -222,22 +222,26 @@ export function BackofficeLayout2040() {
                     <p className="text-xs text-sun-600 font-medium mt-1">{user?.role || user?.user_type}</p>
                   </div>
                   <div className="p-2">
-                    <Link 
-                      to="/backoffice/settings/profile"
-                      className="w-full flex items-center gap-2 px-3 py-2 hover:bg-saturn-50 rounded-lg transition-all duration-120"
-                      onClick={() => setShowProfile(false)}
+                    <button
+                      onClick={() => {
+                        setShowProfile(false);
+                        navigate('/backoffice/settings/profile');
+                      }}
+                      className="w-full flex items-center gap-2 px-3 py-2 hover:bg-saturn-50 rounded-lg transition-all duration-120 text-left"
                     >
                       <UserCircleIcon className="w-4 h-4 text-saturn-600" />
                       <span className="text-sm text-saturn-900">Profile</span>
-                    </Link>
-                    <Link
-                      to="/backoffice/settings/sessions"
-                      className="w-full flex items-center gap-2 px-3 py-2 hover:bg-saturn-50 rounded-lg transition-all duration-120"
-                      onClick={() => setShowProfile(false)}
+                    </button>
+                    <button
+                      onClick={() => {
+                        setShowProfile(false);
+                        navigate('/backoffice/settings/sessions');
+                      }}
+                      className="w-full flex items-center gap-2 px-3 py-2 hover:bg-saturn-50 rounded-lg transition-all duration-120 text-left"
                     >
                       <CogIcon className="w-4 h-4 text-saturn-600" />
                       <span className="text-sm text-saturn-900">Sessions</span>
-                    </Link>
+                    </button>
                     <hr className="my-2 border-saturn-200" />
                     <button 
                       onClick={handleLogout}

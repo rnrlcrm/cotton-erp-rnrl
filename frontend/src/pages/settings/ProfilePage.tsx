@@ -7,6 +7,7 @@ import { useState, FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { authService } from '@/services/api/authService';
+import { PasswordStrengthMeter } from '@/components/auth/PasswordStrengthMeter';
 import {
   KeyIcon,
   DevicePhoneMobileIcon,
@@ -260,7 +261,13 @@ export function ProfilePage() {
                   )}
                 </button>
               </div>
-              <p className="text-xs text-saturn-500 mt-1">Minimum 8 characters</p>
+              
+              {/* Password strength meter */}
+              {newPassword && (
+                <div className="mt-3">
+                  <PasswordStrengthMeter password={newPassword} />
+                </div>
+              )}
             </div>
 
             {/* Confirm password */}
@@ -305,9 +312,17 @@ export function ProfilePage() {
               View All Sessions →
             </Link>
           </div>
-          <p className="text-saturn-600">
+          <p className="text-saturn-600 mb-4">
             Manage your active login sessions across all devices from the sessions page.
           </p>
+          
+          <Link
+            to="/backoffice/settings/2fa"
+            className="inline-flex items-center gap-2 text-sm font-medium text-saturn-600 hover:text-saturn-900 transition-colors"
+          >
+            <KeyIcon className="w-4 h-4" />
+            Configure Two-Factor Authentication →
+          </Link>
         </div>
       )}
     </div>

@@ -25,6 +25,13 @@ export const API_ENDPOINTS = {
     LOGOUT_ALL: '/auth/sessions/all',
     ME: '/settings/auth/me',
     CHANGE_PASSWORD: '/settings/auth/change-password',
+    TWO_FACTOR_STATUS: '/auth/2fa/status',
+    TWO_FACTOR_SETUP: '/auth/2fa/setup',
+    TWO_FACTOR_VERIFY: '/auth/2fa/verify',
+    TWO_FACTOR_DISABLE: '/auth/2fa',
+    FORGOT_PASSWORD: '/settings/auth/forgot-password',
+    RESET_PASSWORD: '/settings/auth/reset-password',
+    VERIFY_EMAIL: '/settings/auth/verify-email',
   },
   
   // Session management
